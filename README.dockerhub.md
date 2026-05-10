@@ -129,8 +129,3 @@ This section is shortened on Docker Hub. See the full table in the GitHub README
 
 Use `EVENT_TRACK` with an underscore token.<br/>
 Example: `EVENT_TRACK=Nurburgring_Touristenfahrten`.
-
-## Known Issues
-
-- The official dedicated server currently crashes after running for some time.
-- This is expected until Kunos patches the dedicated server; it is not caused by this repo or image.

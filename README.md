@@ -311,11 +311,6 @@ Use these underscore tokens for the environment variable `EVENT_TRACK`.
 
 This project is licensed under the MIT License. See the LICENSE file for more details.
 
-## Known Issues
-
-The official dedicated server currently crashes after running for some time.<br/>
-This is expected until Kunos patches the dedicated server; it is not caused by this repo or image.
-
 ## Contributing
 
 Contributions are welcome!<br/>
