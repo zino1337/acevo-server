@@ -2,8 +2,8 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![CI](https://github.com/zino1337/acevo-server/actions/workflows/ci.yml/badge.svg)](https://github.com/zino1337/acevo-server/actions/workflows/ci.yml)
-[![Docker Pulls](https://img.shields.io/docker/pulls/zino1337/acevo-server.svg)](https://hub.docker.com/r/zino1337/acevo-server)
-[![Docker Image Size](https://img.shields.io/docker/image-size/zino1337/acevo-server/latest)](https://hub.docker.com/r/zino1337/acevo-server)
+[![Docker Pulls](https://img.shields.io/docker/pulls/zino1337/acevo-server?cacheSeconds=3600)](https://hub.docker.com/r/zino1337/acevo-server)
+[![Docker Image Size](https://img.shields.io/docker/image-size/zino1337/acevo-server/latest?cacheSeconds=3600)](https://hub.docker.com/r/zino1337/acevo-server)
 [![GitHub Repository](https://img.shields.io/badge/GitHub-Repository-181717?logo=github)](https://github.com/zino1337/acevo-server)
 
 Highly customizable Assetto Corsa Evo Dedicated Server running on Linux via Proton.<br/>
