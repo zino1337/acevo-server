@@ -1,0 +1,714 @@
+[
+  {
+    "display_name": "Abarth 695 Biposto - Standard",
+    "internal_name": "preset_695b_mech_1",
+    "performance_indicator": 9.9,
+    "property_1": 0,
+    "property_2": 0,
+    "property_3": 0
+  },
+  {
+    "display_name": "Alfa Romeo 75 Turbo Evoluzione - Standard",
+    "internal_name": "preset_75t_mech_1",
+    "performance_indicator": 8.2,
+    "property_1": 0,
+    "property_2": 1,
+    "property_3": 0
+  },
+  {
+    "display_name": "Alfa Romeo Giulia GTAm - Standard",
+    "internal_name": "preset_gtam_mech_1",
+    "performance_indicator": 13.4,
+    "property_1": 0,
+    "property_2": 0,
+    "property_3": 0
+  },
+  {
+    "display_name": "Alfa Romeo Giulia Sprint GTA - Standard",
+    "internal_name": "preset_sprintgta_mech_1",
+    "performance_indicator": 7.9,
+    "property_1": 1,
+    "property_2": 1,
+    "property_3": 0
+  },
+  {
+    "display_name": "Alfa Romeo Junior - Elettrica 280 CV Veloce",
+    "internal_name": "preset_mln_mech_1",
+    "performance_indicator": 10.9,
+    "property_1": 0,
+    "property_2": 0,
+    "property_3": 1
+  },
+  {
+    "display_name": "Alpine A110 S - Aero Package",
+    "internal_name": "preset_a110s_mech_1",
+    "performance_indicator": 12.3,
+    "property_1": 0,
+    "property_2": 0,
+    "property_3": 0
+  },
+  {
+    "display_name": "Alpine A290 Beta - Standard",
+    "internal_name": "preset_a290b_mech_1",
+    "performance_indicator": 10.2,
+    "property_1": 0,
+    "property_2": 0,
+    "property_3": 1
+  },
+  {
+    "display_name": "Audi R8 LMS GT4 Evo - GT4",
+    "internal_name": "preset_r8gt4_mech_1",
+    "performance_indicator": 15.6,
+    "property_1": 1,
+    "property_2": 0,
+    "property_3": 0
+  },
+  {
+    "display_name": "Audi RS 3 Sportback - Sportback",
+    "internal_name": "preset_rs3_mech_1",
+    "performance_indicator": 12.2,
+    "property_1": 0,
+    "property_2": 0,
+    "property_3": 0
+  },
+  {
+    "display_name": "Audi RS 6 Avant - Standard",
+    "internal_name": "preset_rs6_mech_1",
+    "performance_indicator": 12.2,
+    "property_1": 0,
+    "property_2": 0,
+    "property_3": 0
+  },
+  {
+    "display_name": "Audi Sport quattro - Standard",
+    "internal_name": "preset_sq_mech_1",
+    "performance_indicator": 10.7,
+    "property_1": 0,
+    "property_2": 1,
+    "property_3": 0
+  },
+  {
+    "display_name": "BMW M2 Coupe - Performance",
+    "internal_name": "preset_m2_mech_2",
+    "performance_indicator": 11.6,
+    "property_1": 0,
+    "property_2": 0,
+    "property_3": 0
+  },
+  {
+    "display_name": "BMW M2 Coupe - Standard",
+    "internal_name": "preset_m2_mech_1",
+    "performance_indicator": 11.5,
+    "property_1": 0,
+    "property_2": 0,
+    "property_3": 0
+  },
+  {
+    "display_name": "BMW M2 CS Racing - 350",
+    "internal_name": "preset_m2csr_mech_1",
+    "performance_indicator": 13.1,
+    "property_1": 1,
+    "property_2": 0,
+    "property_3": 0
+  },
+  {
+    "display_name": "BMW M2 CS Racing - 450",
+    "internal_name": "preset_m2csr_mech_2",
+    "performance_indicator": 13.5,
+    "property_1": 1,
+    "property_2": 0,
+    "property_3": 0
+  },
+  {
+    "display_name": "BMW M3 E30 Sport Evo (Evolution III) - Standard",
+    "internal_name": "preset_m3evoiii_mech_1",
+    "performance_indicator": 9.4,
+    "property_1": 0,
+    "property_2": 2,
+    "property_3": 0
+  },
+  {
+    "display_name": "BMW M3 E46 CSL - Standard",
+    "internal_name": "preset_e46csl_mech_1",
+    "performance_indicator": 10.3,
+    "property_1": 0,
+    "property_2": 0,
+    "property_3": 0
+  },
+  {
+    "display_name": "BMW M4 CSL - Standard",
+    "internal_name": "preset_m4csl_mech_1",
+    "performance_indicator": 11.9,
+    "property_1": 0,
+    "property_2": 0,
+    "property_3": 0
+  },
+  {
+    "display_name": "BMW M4 GT3 Evo - GT3",
+    "internal_name": "preset_m4gt3_mech_1",
+    "performance_indicator": 21.2,
+    "property_1": 1,
+    "property_2": 0,
+    "property_3": 0
+  },
+  {
+    "display_name": "BMW M8 Competition - Standard",
+    "internal_name": "preset_m8c_mech_1",
+    "performance_indicator": 11.6,
+    "property_1": 0,
+    "property_2": 0,
+    "property_3": 0
+  },
+  {
+    "display_name": "Caterham 485 CSR - Final Edition",
+    "internal_name": "ks_caterham_485_csr_mech_3",
+    "performance_indicator": 10.7,
+    "property_1": 0,
+    "property_2": 0,
+    "property_3": 0
+  },
+  {
+    "display_name": "Caterham 485 CSR - Road",
+    "internal_name": "ks_caterham_485_csr_mech_1",
+    "performance_indicator": 10.7,
+    "property_1": 0,
+    "property_2": 0,
+    "property_3": 0
+  },
+  {
+    "display_name": "Caterham 485 CSR - Track",
+    "internal_name": "ks_caterham_485_csr_mech_2",
+    "performance_indicator": 10.7,
+    "property_1": 0,
+    "property_2": 0,
+    "property_3": 0
+  },
+  {
+    "display_name": "Caterham Academy - Academy",
+    "internal_name": "ks_caterham_acmd_mech_1",
+    "performance_indicator": 8.8,
+    "property_1": 1,
+    "property_2": 0,
+    "property_3": 0
+  },
+  {
+    "display_name": "Chevrolet Camaro ZL1 - 1LE",
+    "internal_name": "preset_zl1_mech_2",
+    "performance_indicator": 12.5,
+    "property_1": 0,
+    "property_2": 0,
+    "property_3": 0
+  },
+  {
+    "display_name": "Chevrolet Camaro ZL1 - Standard",
+    "internal_name": "preset_zl1_mech_1",
+    "performance_indicator": 12.3,
+    "property_1": 0,
+    "property_2": 0,
+    "property_3": 0
+  },
+  {
+    "display_name": "Dallara EXP - Standard",
+    "internal_name": "preset_dalexp_mech_1",
+    "performance_indicator": 22.6,
+    "property_1": 2,
+    "property_2": 0,
+    "property_3": 0
+  },
+  {
+    "display_name": "Dallara Stradale - Coupe",
+    "internal_name": "preset_dalsc_mech_1",
+    "performance_indicator": 19.0,
+    "property_1": 0,
+    "property_2": 0,
+    "property_3": 0
+  },
+  {
+    "display_name": "Dallara Stradale - Spider",
+    "internal_name": "preset_dalsc_mech_2",
+    "performance_indicator": 19.0,
+    "property_1": 0,
+    "property_2": 0,
+    "property_3": 0
+  },
+  {
+    "display_name": "Dallara Stradale - Track",
+    "internal_name": "preset_dalsc_mech_3",
+    "performance_indicator": 19.8,
+    "property_1": 0,
+    "property_2": 0,
+    "property_3": 0
+  },
+  {
+    "display_name": "Ferrari 288 GTO - Standard",
+    "internal_name": "preset_288gto_mech_1",
+    "performance_indicator": 11.1,
+    "property_1": 0,
+    "property_2": 1,
+    "property_3": 0
+  },
+  {
+    "display_name": "Ferrari 296 GT3 - GT3",
+    "internal_name": "preset_296gt3_mech_1",
+    "performance_indicator": 22.3,
+    "property_1": 1,
+    "property_2": 0,
+    "property_3": 0
+  },
+  {
+    "display_name": "Ferrari 296 GTB - Assetto Fiorano",
+    "internal_name": "preset_296gtb_mech_2",
+    "performance_indicator": 14.7,
+    "property_1": 0,
+    "property_2": 0,
+    "property_3": 2
+  },
+  {
+    "display_name": "Ferrari 296 GTB - Standard",
+    "internal_name": "preset_296gtb_mech_1",
+    "performance_indicator": 14.7,
+    "property_1": 0,
+    "property_2": 0,
+    "property_3": 2
+  },
+  {
+    "display_name": "Ferrari 488 Challenge Evo - Ferrari Challenge",
+    "internal_name": "preset_f488ce_mech_1",
+    "performance_indicator": 20.3,
+    "property_1": 1,
+    "property_2": 0,
+    "property_3": 0
+  },
+  {
+    "display_name": "Ferrari Daytona SP3 - Standard",
+    "internal_name": "preset_sp3_mech_1",
+    "performance_indicator": 15.9,
+    "property_1": 0,
+    "property_2": 0,
+    "property_3": 0
+  },
+  {
+    "display_name": "Ferrari F2004 - Standard",
+    "internal_name": "preset_f2004_mech_1",
+    "performance_indicator": 40.8,
+    "property_1": 1,
+    "property_2": 0,
+    "property_3": 0
+  },
+  {
+    "display_name": "Ferrari F40 LM - Standard",
+    "internal_name": "preset_f40lm_mech_1",
+    "performance_indicator": 16.9,
+    "property_1": 1,
+    "property_2": 2,
+    "property_3": 0
+  },
+  {
+    "display_name": "Ferrari SF-25 - F1 2025",
+    "internal_name": "preset_sf25_mech_1",
+    "performance_indicator": 43.4,
+    "property_1": 1,
+    "property_2": 0,
+    "property_3": 2
+  },
+  {
+    "display_name": "Ford Escort RS Cosworth - Standard",
+    "internal_name": "preset_escortrs_mech_1",
+    "performance_indicator": 8.8,
+    "property_1": 0,
+    "property_2": 2,
+    "property_3": 0
+  },
+  {
+    "display_name": "Ford Mustang GT3 - GT3",
+    "internal_name": "preset_msggt3_mech_1",
+    "performance_indicator": 19.4,
+    "property_1": 1,
+    "property_2": 0,
+    "property_3": 0
+  },
+  {
+    "display_name": "Honda NSX-R 92R - Standard",
+    "internal_name": "preset_nsxr_mech_1",
+    "performance_indicator": 10.8,
+    "property_1": 0,
+    "property_2": 2,
+    "property_3": 0
+  },
+  {
+    "display_name": "Honda S2000 AP1 - Standard",
+    "internal_name": "preset_s2000ap1_mech_1",
+    "performance_indicator": 10.4,
+    "property_1": 0,
+    "property_2": 2,
+    "property_3": 0
+  },
+  {
+    "display_name": "Hyundai i30 N Hatchback - Performance",
+    "internal_name": "preset_i30n_hb_mech_1",
+    "performance_indicator": 9.9,
+    "property_1": 0,
+    "property_2": 0,
+    "property_3": 0
+  },
+  {
+    "display_name": "Hyundai i30 N Hatchback - Performance N Limited",
+    "internal_name": "preset_i30n_hb_mech_2",
+    "performance_indicator": 10.1,
+    "property_1": 0,
+    "property_2": 0,
+    "property_3": 0
+  },
+  {
+    "display_name": "Lamborghini Countach LP5000 QV - LP5000 QV",
+    "internal_name": "preset_cntqv_mech_1",
+    "performance_indicator": 9.5,
+    "property_1": 0,
+    "property_2": 1,
+    "property_3": 0
+  },
+  {
+    "display_name": "Lamborghini Huracan ST EVO2 - Super Trofeo",
+    "internal_name": "preset_stevo2_mech_1",
+    "performance_indicator": 18.4,
+    "property_1": 1,
+    "property_2": 0,
+    "property_3": 0
+  },
+  {
+    "display_name": "Lamborghini Huracan STO - Road",
+    "internal_name": "preset_sto_mech_1",
+    "performance_indicator": 15.1,
+    "property_1": 0,
+    "property_2": 0,
+    "property_3": 0
+  },
+  {
+    "display_name": "Lamborghini Huracan STO - Trackday",
+    "internal_name": "preset_sto_mech_2",
+    "performance_indicator": 15.1,
+    "property_1": 0,
+    "property_2": 0,
+    "property_3": 0
+  },
+  {
+    "display_name": "Lancia Delta HF integrale Evoluzione II - Evo 3 \"Violet\"",
+    "internal_name": "preset_hfevoii_mech_2",
+    "performance_indicator": 8.9,
+    "property_1": 0,
+    "property_2": 2,
+    "property_3": 0
+  },
+  {
+    "display_name": "Lancia Delta HF integrale Evoluzione II - Standard",
+    "internal_name": "preset_hfevoii_mech_1",
+    "performance_indicator": 8.8,
+    "property_1": 0,
+    "property_2": 2,
+    "property_3": 0
+  },
+  {
+    "display_name": "Lotus Emira - Sports",
+    "internal_name": "preset_emira_mech_2",
+    "performance_indicator": 13.2,
+    "property_1": 0,
+    "property_2": 0,
+    "property_3": 0
+  },
+  {
+    "display_name": "Lotus Emira - Touring",
+    "internal_name": "preset_emira_mech_1",
+    "performance_indicator": 13.1,
+    "property_1": 0,
+    "property_2": 0,
+    "property_3": 0
+  },
+  {
+    "display_name": "Lotus Exige V6 Cup - Lotus Motorsport",
+    "internal_name": "preset_exigev6_mech_2",
+    "performance_indicator": 14.4,
+    "property_1": 0,
+    "property_2": 0,
+    "property_3": 0
+  },
+  {
+    "display_name": "Lotus Exige V6 Cup - Standard",
+    "internal_name": "preset_exigev6_mech_1",
+    "performance_indicator": 13.2,
+    "property_1": 0,
+    "property_2": 0,
+    "property_3": 0
+  },
+  {
+    "display_name": "Maserati GT2 - GT2",
+    "internal_name": "preset_mcgt2_mech_1",
+    "performance_indicator": 17.8,
+    "property_1": 1,
+    "property_2": 0,
+    "property_3": 0
+  },
+  {
+    "display_name": "Mazda MX-5 NA - RS Limited",
+    "internal_name": "preset_mx5na_mech_2",
+    "performance_indicator": 9.3,
+    "property_1": 0,
+    "property_2": 2,
+    "property_3": 0
+  },
+  {
+    "display_name": "Mazda MX-5 NA - Standard",
+    "internal_name": "preset_mx5na_mech_1",
+    "performance_indicator": 9.1,
+    "property_1": 0,
+    "property_2": 2,
+    "property_3": 0
+  },
+  {
+    "display_name": "Mazda MX-5 ND Cup - Global Cup ND1",
+    "internal_name": "preset_mx5ndcup_mech_1",
+    "performance_indicator": 10.9,
+    "property_1": 1,
+    "property_2": 0,
+    "property_3": 0
+  },
+  {
+    "display_name": "Mazda MX-5 ND Cup - Global Cup ND2",
+    "internal_name": "preset_mx5ndcup_mech_2",
+    "performance_indicator": 11.1,
+    "property_1": 1,
+    "property_2": 0,
+    "property_3": 0
+  },
+  {
+    "display_name": "Mercedes-AMG GT2 - GT2",
+    "internal_name": "preset_amggt2_mech_1",
+    "performance_indicator": 18.0,
+    "property_1": 1,
+    "property_2": 0,
+    "property_3": 0
+  },
+  {
+    "display_name": "Mercedes-Benz 190E 2.5-16 Evo II - Standard",
+    "internal_name": "preset_190e_mech_1",
+    "performance_indicator": 9.6,
+    "property_1": 0,
+    "property_2": 2,
+    "property_3": 0
+  },
+  {
+    "display_name": "Mini John Cooper S - Standard",
+    "internal_name": "preset_jcs_mech_1",
+    "performance_indicator": 9.5,
+    "property_1": 0,
+    "property_2": 2,
+    "property_3": 0
+  },
+  {
+    "display_name": "Mini John Cooper S - Tune",
+    "internal_name": "preset_jcs_mech_2",
+    "performance_indicator": 10.8,
+    "property_1": 0,
+    "property_2": 2,
+    "property_3": 0
+  },
+  {
+    "display_name": "Peugeot 205 T16 - Standard",
+    "internal_name": "preset_t16_mech_1",
+    "performance_indicator": 9.8,
+    "property_1": 0,
+    "property_2": 2,
+    "property_3": 0
+  },
+  {
+    "display_name": "Porsche 718 Cayman GT4 Clubsport - GT4",
+    "internal_name": "preset_gt4csmr_mech_1",
+    "performance_indicator": 16.4,
+    "property_1": 1,
+    "property_2": 0,
+    "property_3": 0
+  },
+  {
+    "display_name": "Porsche 718 Cayman GT4 RS - Standard",
+    "internal_name": "preset_718gt4rs_mech_1",
+    "performance_indicator": 12.7,
+    "property_1": 0,
+    "property_2": 0,
+    "property_3": 0
+  },
+  {
+    "display_name": "Porsche 718 Cayman GT4 RS - Weissach",
+    "internal_name": "preset_718gt4rs_mech_2",
+    "performance_indicator": 12.7,
+    "property_1": 0,
+    "property_2": 0,
+    "property_3": 0
+  },
+  {
+    "display_name": "Porsche 911 GT3 Cup (992) - ABS",
+    "internal_name": "preset_992c_mech_2",
+    "performance_indicator": 17.3,
+    "property_1": 1,
+    "property_2": 0,
+    "property_3": 0
+  },
+  {
+    "display_name": "Porsche 911 GT3 Cup (992) - ABS TC",
+    "internal_name": "preset_992c_mech_1",
+    "performance_indicator": 17.3,
+    "property_1": 1,
+    "property_2": 0,
+    "property_3": 0
+  },
+  {
+    "display_name": "Porsche 911 GT3 Cup (992) - No ABS No TC",
+    "internal_name": "preset_992c_mech_3",
+    "performance_indicator": 17.3,
+    "property_1": 1,
+    "property_2": 0,
+    "property_3": 0
+  },
+  {
+    "display_name": "Porsche 911 GT3 R Rennsport (992) - GT3",
+    "internal_name": "preset_992ren_mech_1",
+    "performance_indicator": 19.9,
+    "property_1": 1,
+    "property_2": 0,
+    "property_3": 0
+  },
+  {
+    "display_name": "Porsche 911 GT3 R Rennsport (992) - Unrestricted",
+    "internal_name": "preset_992ren_mech_2",
+    "performance_indicator": 20.4,
+    "property_1": 1,
+    "property_2": 0,
+    "property_3": 0
+  },
+  {
+    "display_name": "Porsche 911 GT3 RS (992) - Clubsport",
+    "internal_name": "preset_gt3rs_mech_1",
+    "performance_indicator": 16.6,
+    "property_1": 0,
+    "property_2": 0,
+    "property_3": 0
+  },
+  {
+    "display_name": "Porsche 911 GT3 RS (992) - Weissach",
+    "internal_name": "preset_gt3rs_mech_2",
+    "performance_indicator": 16.6,
+    "property_1": 0,
+    "property_2": 0,
+    "property_3": 0
+  },
+  {
+    "display_name": "Porsche 911 Turbo 3.6 (964) - Standard",
+    "internal_name": "preset_964_mech_1",
+    "performance_indicator": 12.3,
+    "property_1": 0,
+    "property_2": 2,
+    "property_3": 0
+  },
+  {
+    "display_name": "Porsche 911 Turbo 3.6 (964) - X88",
+    "internal_name": "preset_964_mech_2",
+    "performance_indicator": 12.4,
+    "property_1": 0,
+    "property_2": 2,
+    "property_3": 0
+  },
+  {
+    "display_name": "Renault 5 GT Turbo - Standard",
+    "internal_name": "preset_r5gt_mech_1",
+    "performance_indicator": 8.5,
+    "property_1": 0,
+    "property_2": 2,
+    "property_3": 0
+  },
+  {
+    "display_name": "Toyota GR86 - Hakone Edition",
+    "internal_name": "preset_gr86_mech_3",
+    "performance_indicator": 10.9,
+    "property_1": 0,
+    "property_2": 0,
+    "property_3": 0
+  },
+  {
+    "display_name": "Toyota GR86 - Standard",
+    "internal_name": "preset_gr86_mech_1",
+    "performance_indicator": 10.9,
+    "property_1": 0,
+    "property_2": 0,
+    "property_3": 0
+  },
+  {
+    "display_name": "Toyota GR86 - Trueno Edition",
+    "internal_name": "preset_gr86_mech_2",
+    "performance_indicator": 10.9,
+    "property_1": 0,
+    "property_2": 0,
+    "property_3": 0
+  },
+  {
+    "display_name": "Toyota Sprinter Trueno 1600GT-Apex (AE86) - Anime Tribute",
+    "internal_name": "preset_ae86_mech_4",
+    "performance_indicator": 9.6,
+    "property_1": 0,
+    "property_2": 1,
+    "property_3": 0
+  },
+  {
+    "display_name": "Toyota Sprinter Trueno 1600GT-Apex (AE86) - Kouki",
+    "internal_name": "preset_ae86_mech_2",
+    "performance_indicator": 8.3,
+    "property_1": 0,
+    "property_2": 1,
+    "property_3": 0
+  },
+  {
+    "display_name": "Toyota Sprinter Trueno 1600GT-Apex (AE86) - Kouki Black Limited",
+    "internal_name": "preset_ae86_mech_3",
+    "performance_indicator": 8.3,
+    "property_1": 0,
+    "property_2": 1,
+    "property_3": 0
+  },
+  {
+    "display_name": "Toyota Sprinter Trueno 1600GT-Apex (AE86) - Zenki",
+    "internal_name": "preset_ae86_mech_1",
+    "performance_indicator": 8.3,
+    "property_1": 0,
+    "property_2": 1,
+    "property_3": 0
+  },
+  {
+    "display_name": "Toyota Supra MKIV - Drift",
+    "internal_name": "preset_supramkiv_mech_2",
+    "performance_indicator": 13.0,
+    "property_1": 0,
+    "property_2": 2,
+    "property_3": 0
+  },
+  {
+    "display_name": "Toyota Supra MKIV - Standard",
+    "internal_name": "preset_supramkiv_mech_1",
+    "performance_indicator": 10.9,
+    "property_1": 0,
+    "property_2": 2,
+    "property_3": 0
+  },
+  {
+    "display_name": "Volkswagen Golf 8 GTI - Clubsport",
+    "internal_name": "preset_mk8gti_mech_1",
+    "performance_indicator": 11.1,
+    "property_1": 0,
+    "property_2": 0,
+    "property_3": 0
+  },
+  {
+    "display_name": "Volkswagen Golf GTI Mk1 - Standard",
+    "internal_name": "preset_gtimk1_mech_1",
+    "performance_indicator": 7.4,
+    "property_1": 0,
+    "property_2": 1,
+    "property_3": 0
+  }
+]

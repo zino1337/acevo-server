@@ -1,0 +1,249 @@
+{
+  "events": [
+    {
+      "track": "Brands Hatch",
+      "layout": "GP",
+      "event_name": "GP Time Attack",
+      "track_length": 3916,
+      "max_pit_slot": 32
+    },
+    {
+      "track": "Brands Hatch",
+      "layout": "Indy",
+      "event_name": "Indy Time Attack",
+      "track_length": 1944,
+      "max_pit_slot": 32
+    },
+    {
+      "track": "Circuit Of The Americas",
+      "layout": "GP",
+      "event_name": "GP Time Attack",
+      "track_length": 5515,
+      "max_pit_slot": 34
+    },
+    {
+      "track": "Circuit Of The Americas",
+      "layout": "National",
+      "event_name": "National Time Attack",
+      "track_length": 3702,
+      "max_pit_slot": 34
+    },
+    {
+      "track": "Circuit de Spa Francorchamps",
+      "layout": "GP",
+      "event_name": "GP Time Attack",
+      "track_length": 7004,
+      "max_pit_slot": 36
+    },
+    {
+      "track": "Donington Park",
+      "layout": "GP",
+      "event_name": "GP Time Attack",
+      "track_length": 4020,
+      "max_pit_slot": 19
+    },
+    {
+      "track": "Donington Park",
+      "layout": "National",
+      "event_name": "National Time Attack",
+      "track_length": 3149,
+      "max_pit_slot": 19
+    },
+    {
+      "track": "Fuji Speedway",
+      "layout": "GP",
+      "event_name": "GP Time Attack",
+      "track_length": 4549,
+      "max_pit_slot": 34
+    },
+    {
+      "track": "Fuji Speedway",
+      "layout": "GP Short",
+      "event_name": "GP Short Time Attack",
+      "track_length": 4526,
+      "max_pit_slot": 34
+    },
+    {
+      "track": "Imola",
+      "layout": "GP",
+      "event_name": "GP Time Attack",
+      "track_length": 4909,
+      "max_pit_slot": 29
+    },
+    {
+      "track": "Laguna Seca",
+      "layout": "GP",
+      "event_name": "GP Time Attack",
+      "track_length": 3602,
+      "max_pit_slot": 24
+    },
+    {
+      "track": "Monza",
+      "layout": "GP",
+      "event_name": "GP Time Attack",
+      "track_length": 5793,
+      "max_pit_slot": 30
+    },
+    {
+      "track": "Mount Panorama",
+      "layout": "GP",
+      "event_name": "GP Time Attack",
+      "track_length": 6213,
+      "max_pit_slot": 35
+    },
+    {
+      "track": "Nurburgring",
+      "layout": "24h",
+      "event_name": "24h Time Attack",
+      "track_length": 25947,
+      "max_pit_slot": 30
+    },
+    {
+      "track": "Nurburgring",
+      "layout": "Gp Strecke",
+      "event_name": "Gp Strecke Time Attack",
+      "track_length": 5148,
+      "max_pit_slot": 30
+    },
+    {
+      "track": "Nurburgring",
+      "layout": "Nordschleife",
+      "event_name": "Nordschleife Time Attack",
+      "track_length": 20832,
+      "max_pit_slot": 5
+    },
+    {
+      "track": "Nurburgring",
+      "layout": "Sprint",
+      "event_name": "Sprint Time Attack",
+      "track_length": 3629,
+      "max_pit_slot": 30
+    },
+    {
+      "track": "Nurburgring",
+      "layout": "Touristenfahrten",
+      "event_name": "Touristenfahrten Time Attack",
+      "track_length": 19300,
+      "max_pit_slot": 50
+    },
+    {
+      "track": "Oulton Park",
+      "layout": "International",
+      "event_name": "International Time Attack",
+      "track_length": 4333,
+      "max_pit_slot": 16
+    },
+    {
+      "track": "Oulton Park",
+      "layout": "Fosters",
+      "event_name": "Fosters Time Attack",
+      "track_length": 2662,
+      "max_pit_slot": 16
+    },
+    {
+      "track": "Paul Ricard",
+      "layout": "Layout 1A-V2",
+      "event_name": "Layout 1A-V2 Time Attack",
+      "track_length": 5770,
+      "max_pit_slot": 34
+    },
+    {
+      "track": "Paul Ricard",
+      "layout": "Layout 1C-V2",
+      "event_name": "Layout 1C-V2 Time Attack",
+      "track_length": 5842,
+      "max_pit_slot": 34
+    },
+    {
+      "track": "Paul Ricard",
+      "layout": "Layout 3A",
+      "event_name": "Layout 3A Time Attack",
+      "track_length": 3793,
+      "max_pit_slot": 34
+    },
+    {
+      "track": "Paul Ricard",
+      "layout": "Layout 3C",
+      "event_name": "Layout 3C Time Attack",
+      "track_length": 3841,
+      "max_pit_slot": 34
+    },
+    {
+      "track": "Red Bull Ring",
+      "layout": "GP",
+      "event_name": "GP Time Attack",
+      "track_length": 4318,
+      "max_pit_slot": 28
+    },
+    {
+      "track": "Red Bull Ring",
+      "layout": "National",
+      "event_name": "National Time Attack",
+      "track_length": 2336,
+      "max_pit_slot": 28
+    },
+    {
+      "track": "Road Atlanta",
+      "layout": "GP",
+      "event_name": "GP Time Attack",
+      "track_length": 4088,
+      "max_pit_slot": 28
+    },
+    {
+      "track": "Sebring International Raceway",
+      "layout": "GP",
+      "event_name": "GP Time Attack",
+      "track_length": 5954,
+      "max_pit_slot": 45
+    },
+    {
+      "track": "Suzuka",
+      "layout": "GP",
+      "event_name": "GP Time Attack",
+      "track_length": 5807,
+      "max_pit_slot": 25
+    },
+    {
+      "track": "Suzuka",
+      "layout": "East",
+      "event_name": "East Time Attack",
+      "track_length": 2243,
+      "max_pit_slot": 25
+    },
+    {
+      "track": "Suzuka",
+      "layout": "West",
+      "event_name": "West Time Attack",
+      "track_length": 3466,
+      "max_pit_slot": 10
+    },
+    {
+      "track": "Watkins Glen International",
+      "layout": "GP Inner Loop",
+      "event_name": "GP Inner Loop Time Attack",
+      "track_length": 5552,
+      "max_pit_slot": 40
+    },
+    {
+      "track": "Watkins Glen International",
+      "layout": "Short Inner Loop",
+      "event_name": "Short Inner Loop Time Attack",
+      "track_length": 3943,
+      "max_pit_slot": 40
+    },
+    {
+      "track": "Watkins Glen International",
+      "layout": "GP",
+      "event_name": "GP Time Attack",
+      "track_length": 5435,
+      "max_pit_slot": 40
+    },
+    {
+      "track": "Watkins Glen International",
+      "layout": "Short",
+      "event_name": "Short Time Attack",
+      "track_length": 3907,
+      "max_pit_slot": 40
+    }
+  ]
+}

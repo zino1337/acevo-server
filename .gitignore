@@ -1,0 +1,9 @@
+.codex
+.env
+node_modules/
+.ruff_cache/
+.ruff-cache-user/
+__pycache__/
+*.py[cod]
+volumes/data/
+volumes/steam/

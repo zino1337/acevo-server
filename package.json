@@ -1,0 +1,11 @@
+{
+  "private": true,
+  "scripts": {
+    "format": "npx --yes prettier@3.2.4 . --write --ignore-unknown --cache-location /tmp/acevo-prettier-cache && npm run format:python",
+    "format:check": "npx --yes prettier@3.2.4 . --check --ignore-unknown --cache-location /tmp/acevo-prettier-cache && npx --yes editorconfig-checker@5.1.8 && npm run format:python:check",
+    "format:python": "docker run --rm -u $(id -u):$(id -g) -v \"$PWD:/io\" -w /io ghcr.io/astral-sh/ruff:0.15.12 format --no-cache scripts tests",
+    "format:python:check": "docker run --rm -u $(id -u):$(id -g) -v \"$PWD:/io\" -w /io ghcr.io/astral-sh/ruff:0.15.12 format --no-cache --check scripts tests",
+    "test": "python3 -B -m unittest discover -s tests",
+    "check": "npm run format:check && npm test"
+  }
+}

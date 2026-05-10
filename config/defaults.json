@@ -1,0 +1,72 @@
+{
+  "server": {
+    "server_name": "AC EVO Nordschleife Trackday",
+    "max_players": 20,
+    "tcp_port": 9700,
+    "udp_port": 9700,
+    "http_port": 8080,
+    "server_type": "MultiplayerServerListSessionType_RANKED",
+    "cycle_enabled": true,
+    "driver_password": "",
+    "spectator_password": "",
+    "admin_password": "",
+    "min_waiting_players": 10,
+    "max_waiting_players": 30
+  },
+  "event": {
+    "type": "GameModeType_PRACTICE",
+    "initial_grip": "InitialGrip_OPTIMUM",
+    "weather_behaviour": "GameModeSelectionWeatherBehaviour_STATIC",
+    "weather": "GameModeSelectionWeatherType_CLEAR",
+    "track": "Nurburgring_Touristenfahrten",
+    "cars": "all",
+    "car_category": "all"
+  },
+  "sessions": {
+    "practice": {
+      "year": 2024,
+      "month": 8,
+      "day": 15,
+      "duration_minutes": 180,
+      "hour": 14,
+      "minute": 0,
+      "time_multiplier": 1,
+      "max_wait_to_box_seconds": 10,
+      "overtime_waiting_next_session_seconds": 10
+    },
+    "qualify": {
+      "year": 2024,
+      "month": 8,
+      "day": 15,
+      "duration_minutes": 10,
+      "hour": 16,
+      "minute": 0,
+      "time_multiplier": 1,
+      "max_wait_to_box_seconds": 10,
+      "overtime_waiting_next_session_seconds": 10
+    },
+    "warmup": {
+      "year": 2024,
+      "month": 8,
+      "day": 15,
+      "duration_minutes": 5,
+      "hour": 16,
+      "minute": 0,
+      "time_multiplier": 1,
+      "max_wait_to_box_seconds": 10,
+      "overtime_waiting_next_session_seconds": 10
+    },
+    "race": {
+      "year": 2024,
+      "month": 8,
+      "day": 15,
+      "duration_minutes": 25,
+      "duration_laps": 10,
+      "hour": 16,
+      "minute": 0,
+      "time_multiplier": 1,
+      "max_wait_to_box_seconds": 10,
+      "overtime_waiting_next_session_seconds": 10
+    }
+  }
+}

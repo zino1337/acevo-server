@@ -1,0 +1,25 @@
+services:
+  acevo-server:
+    image: zino1337/acevo-server:latest
+    build:
+      context: .
+    container_name: acevo-server
+    restart: no
+    stop_grace_period: 90s
+    volumes:
+      - ./volumes/data:/data
+      - ./volumes/steam:/root/.local/share/Steam
+    env_file:
+      - .env
+    environment:
+      - EVENT_TYPE=Race_Weekend
+      - EVENT_TRACK=Brands Hatch GP
+      - PRACTICE_DURATION_MINUTES=0
+      - QUALIFY_DURATION_MINUTES=10
+      - WARMUP_DURATION_MINUTES=0
+      - RACE_DURATION_TYPE=Time
+      - RACE_DURATION_MINUTES=25
+    ports:
+      - "${SERVER_TCP_PORT:-9700}:${SERVER_TCP_PORT:-9700}/tcp"
+      - "${SERVER_UDP_PORT:-9700}:${SERVER_UDP_PORT:-9700}/udp"
+      - "${SERVER_HTTP_PORT:-8080}:${SERVER_HTTP_PORT:-8080}/tcp"

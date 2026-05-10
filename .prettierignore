@@ -1,0 +1,6 @@
+.git
+.codex
+.ruff_cache/
+__pycache__/
+*.pyc
+volumes/
