@@ -85,6 +85,7 @@ This section is shortened on Docker Hub. See the full table in the GitHub README
 | `STEAM_USERNAME`                 | empty                          | Steam account name, not email.                   |
 | `STEAM_PASSWORD`                 | empty                          | Steam account password for SteamCMD.             |
 | `STEAM_AUTH_CODE`                | empty                          | Steam Guard auth code for the next login.        |
+| `SERVER_LAUNCHER_JSON`           | `/data/server_launcher.json`   | Optional official tool config loaded as base.    |
 | `SERVER_NAME`                    | `AC EVO Nordschleife Trackday` | Public server name.                              |
 | `SERVER_TCP_PORT`                | `9700`                         | TCP listener port. Must match `SERVER_UDP_PORT`. |
 | `SERVER_UDP_PORT`                | `9700`                         | UDP listener port. Must match `SERVER_TCP_PORT`. |

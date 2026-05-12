@@ -12,11 +12,13 @@ import struct
 import sys
 import unicodedata
 import zlib
+from dataclasses import dataclass, field
 from functools import lru_cache
 from pathlib import Path
 
 TRUE_VALUES = {"1", "true", "yes", "y", "on"}
 FALSE_VALUES = {"0", "false", "no", "n", "off"}
+DEFAULT_SERVER_LAUNCHER_JSON = "/data/server_launcher.json"
 SESSION_PREFIXES = ("PRACTICE", "QUALIFY", "WARMUP", "RACE")
 SESSION_NAMES = {
     "PRACTICE": "practice",
@@ -46,6 +48,7 @@ SESSION_FIELDS = (
     "OVERTIME_WAITING_NEXT_SESSION_SECONDS",
 )
 ENV_BASE_KEYS = (
+    "SERVER_LAUNCHER_JSON",
     "SERVER_NAME",
     "SERVER_MAX_PLAYERS",
     "SERVER_TCP_PORT",
@@ -130,6 +133,18 @@ CAR_ENGINES_MAP = {"ice": 0, "ev": 1, "hybrid": 2}
 CAR_CATEGORY_NAMES = {"all", *CAR_TYPES_MAP, *CAR_ERAS_MAP, *CAR_ENGINES_MAP}
 
 
+@dataclass
+class LauncherImport:
+    values: dict[str, object] = field(default_factory=dict)
+    car_options: dict[str, dict[str, float]] = field(default_factory=dict)
+    duration_seconds: dict[str, int] = field(default_factory=dict)
+    warnings: list[str] = field(default_factory=list)
+    path: str = DEFAULT_SERVER_LAUNCHER_JSON
+    source: str = "default"
+    loaded: bool = False
+    note: str = "auto-load if file exists"
+
+
 def normalize_label(value: str) -> str:
     text = unicodedata.normalize("NFKD", value)
     text = text.encode("ascii", "ignore").decode("ascii").replace("_", " ")
@@ -198,6 +213,337 @@ def _read_json(path: Path):
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+def append_if_present(values: dict[str, object], target: str, source: dict, source_key: str) -> None:
+    if source_key in source:
+        values[target] = source[source_key]
+
+
+def compact_ignored_warning(launcher: LauncherImport, ignored: list[str]) -> None:
+    if not ignored:
+        return
+    shown = ", ".join(ignored[:12])
+    extra = len(ignored) - 12
+    if extra > 0:
+        shown = f"{shown}, and {extra} more"
+    launcher.warnings.append(f"server_launcher.json: ignored unsupported fields: {shown}.")
+
+
+def warn_unsupported_launcher_fields(launcher: LauncherImport, document: dict) -> None:
+    ignored: list[str] = []
+    server = document.get("Server")
+    if isinstance(server, dict):
+        supported = {
+            "SelectedServerTypeValue",
+            "ServerName",
+            "MaxPlayers",
+            "TcpPort",
+            "UdpPort",
+            "HttpPort",
+            "IsCycleEnabled",
+            "DriverPassword",
+            "SpectatorPassword",
+            "AdminPassword",
+            "EntryListUrl",
+            "ResultsPostUrl",
+            "EntryListPath",
+            "ResultsPath",
+        }
+        ignored.extend(f"Server.{key}" for key in server if key not in supported)
+
+    event = document.get("Event")
+    if isinstance(event, dict):
+        supported = {
+            "SelectedSessionTypeValue",
+            "SelectedWeatherTypeValue",
+            "SelectedWeatherBehaviorValue",
+            "SelectedWeatherBehaviourValue",
+            "SelectedInitialGripValue",
+            "SelectedTrackValue",
+            "Cars",
+            "ShowOnlySelected",
+        }
+        ignored.extend(f"Event.{key}" for key in event if key not in supported)
+
+    sessions = document.get("Sessions")
+    if isinstance(sessions, dict):
+        supported = {
+            "forceTimeDuration",
+            "IsVisible",
+            "Name",
+            "TimeMultiplier",
+            "Duration",
+            "Length",
+            "Hour",
+            "Minute",
+            "MaxWaitToBox",
+            "OvertimeWaitingNextSession",
+            "MinWaitingForPlayers",
+            "MaxWaitingForPlayers",
+        }
+        for session_name, session in sessions.items():
+            if isinstance(session, dict):
+                ignored.extend(f"Sessions.{session_name}.{key}" for key in session if key not in supported)
+
+    compact_ignored_warning(launcher, ignored)
+
+
+def bool_from_launcher(value) -> bool | None:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        lowered = value.strip().lower()
+        if lowered in TRUE_VALUES:
+            return True
+        if lowered in FALSE_VALUES:
+            return False
+    return None
+
+
+def float_from_launcher(value, field_name: str, launcher: LauncherImport) -> float:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        launcher.warnings.append(f"server_launcher.json: {field_name}: invalid number '{value}', using 0.0.")
+        return 0.0
+
+
+def int_from_launcher(value, field_name: str, launcher: LauncherImport) -> int | None:
+    try:
+        return int(float(value))
+    except (TypeError, ValueError):
+        launcher.warnings.append(f"server_launcher.json: {field_name}: invalid integer '{value}', ignoring.")
+        return None
+
+
+def launcher_car_name(car: dict, cfg: dict) -> str | None:
+    raw_name = str(car.get("name", "")).strip()
+    if raw_name and any(item["internal_name"] == raw_name for item in cfg["cars_data"]):
+        return raw_name
+
+    display_name = str(car.get("display_name", "")).strip()
+    if display_name:
+        normalized = normalize_label(display_name)
+        for item in cfg["cars_data"]:
+            if normalize_label(item["display_name"]) == normalized:
+                return item["internal_name"]
+
+    return None
+
+
+def map_launcher_cars(launcher: LauncherImport, cfg: dict, event: dict) -> None:
+    cars = event.get("Cars")
+    if not isinstance(cars, list):
+        return
+
+    selected: list[str] = []
+    seen: set[str] = set()
+    selected_count = 0
+
+    for index, car in enumerate(cars):
+        if not isinstance(car, dict):
+            launcher.warnings.append(f"server_launcher.json: Event.Cars[{index}] is not an object, ignoring.")
+            continue
+        is_selected = bool_from_launcher(car.get("IsSelected", car.get("is_selected", False)))
+        if not is_selected:
+            continue
+        selected_count += 1
+        car_name = launcher_car_name(car, cfg)
+        if car_name is None:
+            label = car.get("name") or car.get("display_name") or f"index {index}"
+            launcher.warnings.append(f"server_launcher.json: Event.Cars selected car '{label}' is unknown, ignoring.")
+            continue
+        if car_name not in seen:
+            seen.add(car_name)
+            selected.append(car_name)
+        launcher.car_options[car_name] = {
+            "ballast": int_from_launcher(
+                car.get("Ballast", car.get("ballast", 0.0)), f"Event.Cars[{index}].Ballast", launcher
+            )
+            or 0,
+            "restrictor": float_from_launcher(
+                car.get("Restrictor", car.get("restrictor", 0.0)),
+                f"Event.Cars[{index}].Restrictor",
+                launcher,
+            ),
+        }
+
+    if selected:
+        launcher.values["EVENT_CARS"] = ",".join(selected)
+    elif selected_count:
+        launcher.warnings.append("server_launcher.json: no valid selected cars found, using defaults.")
+
+
+def map_launcher_waiting_players(launcher: LauncherImport, event_type: str, sessions: dict) -> None:
+    if not isinstance(sessions, dict):
+        return
+
+    primary = "RaceSession" if event_type == "GameModeType_RACE_WEEKEND" else "PracticeSession"
+    session_values: dict[str, tuple[int | None, int | None]] = {}
+
+    for session_name, session in sessions.items():
+        if not isinstance(session, dict):
+            continue
+        minimum = (
+            int_from_launcher(
+                session.get("MinWaitingForPlayers"),
+                f"Sessions.{session_name}.MinWaitingForPlayers",
+                launcher,
+            )
+            if "MinWaitingForPlayers" in session
+            else None
+        )
+        maximum = (
+            int_from_launcher(
+                session.get("MaxWaitingForPlayers"),
+                f"Sessions.{session_name}.MaxWaitingForPlayers",
+                launcher,
+            )
+            if "MaxWaitingForPlayers" in session
+            else None
+        )
+        if minimum is not None or maximum is not None:
+            session_values[session_name] = (minimum, maximum)
+
+    if not session_values:
+        return
+
+    distinct = {values for values in session_values.values()}
+    if len(distinct) > 1:
+        launcher.warnings.append(
+            "server_launcher.json: per-session waiting player values differ; "
+            f"using {primary} because payload supports one global value."
+        )
+
+    selected = session_values.get(primary) or next(iter(session_values.values()))
+    if selected[0] is not None:
+        launcher.values["SERVER_MIN_WAITING_PLAYERS"] = selected[0]
+    if selected[1] is not None:
+        launcher.values["SERVER_MAX_WAITING_PLAYERS"] = selected[1]
+
+
+def map_launcher_sessions(launcher: LauncherImport, sessions: dict) -> None:
+    if not isinstance(sessions, dict):
+        return
+
+    session_map = {
+        "PracticeSession": "PRACTICE",
+        "QualifyingSession": "QUALIFY",
+        "WarmupSession": "WARMUP",
+        "RaceSession": "RACE",
+    }
+
+    for session_name, prefix in session_map.items():
+        session = sessions.get(session_name)
+        if not isinstance(session, dict):
+            continue
+
+        field_map = {
+            "TimeMultiplier": f"{prefix}_TIME_MULTIPLIER",
+            "Hour": f"{prefix}_HOUR",
+            "Minute": f"{prefix}_MINUTE",
+            "MaxWaitToBox": f"{prefix}_MAX_WAIT_TO_BOX_SECONDS",
+            "OvertimeWaitingNextSession": f"{prefix}_OVERTIME_WAITING_NEXT_SESSION_SECONDS",
+        }
+        for source_key, target_key in field_map.items():
+            append_if_present(launcher.values, target_key, session, source_key)
+
+        length = session.get("Length", session.get("Duration"))
+        if length is None:
+            continue
+        length_int = int_from_launcher(length, f"Sessions.{session_name}.Length", launcher)
+        if length_int is None:
+            continue
+
+        force_time = bool_from_launcher(session.get("forceTimeDuration", True))
+        if prefix == "RACE" and force_time is False:
+            launcher.values["RACE_DURATION_TYPE"] = "Laps"
+            launcher.values["RACE_DURATION_LAPS"] = length_int
+            continue
+
+        if prefix == "RACE":
+            launcher.values["RACE_DURATION_TYPE"] = "Time"
+        launcher.values[f"{prefix}_DURATION_MINUTES"] = length_int / 60
+        launcher.duration_seconds[prefix] = length_int
+
+
+def load_server_launcher_json(env: dict[str, str], cfg: dict) -> LauncherImport:
+    explicit_path = str(env.get("SERVER_LAUNCHER_JSON", "")).strip()
+    path = Path(explicit_path or DEFAULT_SERVER_LAUNCHER_JSON)
+    launcher = LauncherImport(path=str(path), source="env" if explicit_path else "default")
+
+    if not path.exists():
+        launcher.note = "file not found; using ENV/defaults" if explicit_path else "auto-load path not present"
+        if explicit_path:
+            launcher.warnings.append(f"SERVER_LAUNCHER_JSON: file not found: {path}; using ENV/defaults.")
+        return launcher
+    if not path.is_file():
+        launcher.note = "not a file; using ENV/defaults"
+        launcher.warnings.append(f"SERVER_LAUNCHER_JSON: not a file: {path}; using ENV/defaults.")
+        return launcher
+
+    try:
+        document = _read_json(path)
+    except Exception as exc:
+        launcher.note = "invalid JSON; using ENV/defaults"
+        launcher.warnings.append(f"SERVER_LAUNCHER_JSON: invalid JSON in {path}: {exc}; using ENV/defaults.")
+        return launcher
+
+    if not isinstance(document, dict):
+        launcher.note = "invalid shape; using ENV/defaults"
+        launcher.warnings.append(f"SERVER_LAUNCHER_JSON: root must be an object in {path}; using ENV/defaults.")
+        return launcher
+
+    launcher.loaded = True
+    launcher.note = "loaded"
+    warn_unsupported_launcher_fields(launcher, document)
+
+    server = document.get("Server")
+    if isinstance(server, dict):
+        mapping = {
+            "SelectedServerTypeValue": "SERVER_TYPE",
+            "ServerName": "SERVER_NAME",
+            "MaxPlayers": "SERVER_MAX_PLAYERS",
+            "TcpPort": "SERVER_TCP_PORT",
+            "UdpPort": "SERVER_UDP_PORT",
+            "HttpPort": "SERVER_HTTP_PORT",
+            "IsCycleEnabled": "SERVER_CYCLE_ENABLED",
+            "DriverPassword": "SERVER_DRIVER_PASSWORD",
+            "SpectatorPassword": "SERVER_SPECTATOR_PASSWORD",
+            "AdminPassword": "SERVER_ADMIN_PASSWORD",
+            "EntryListUrl": "SERVER_ENTRY_LIST_URL",
+            "ResultsPostUrl": "SERVER_RESULTS_POST_URL",
+            "EntryListPath": "SERVER_ENTRY_LIST_PATH",
+            "ResultsPath": "SERVER_RESULTS_PATH",
+        }
+        for source_key, target_key in mapping.items():
+            append_if_present(launcher.values, target_key, server, source_key)
+
+    event = document.get("Event")
+    if isinstance(event, dict):
+        mapping = {
+            "SelectedSessionTypeValue": "EVENT_TYPE",
+            "SelectedWeatherTypeValue": "EVENT_WEATHER",
+            "SelectedWeatherBehaviorValue": "EVENT_WEATHER_BEHAVIOUR",
+            "SelectedWeatherBehaviourValue": "EVENT_WEATHER_BEHAVIOUR",
+            "SelectedInitialGripValue": "EVENT_INITIAL_GRIP",
+            "SelectedTrackValue": "EVENT_TRACK",
+        }
+        for source_key, target_key in mapping.items():
+            append_if_present(launcher.values, target_key, event, source_key)
+        if not any(key in env for key in ("EVENT_CARS", "EVENT_CAR_CATEGORY")):
+            map_launcher_cars(launcher, cfg, event)
+
+    event_type_raw = env.get("EVENT_TYPE", launcher.values.get("EVENT_TYPE", cfg["event_defaults"]["type"]))
+    event_type = normalize_enum_map(MAPPINGS["event_type"]).get(
+        normalize_label(str(event_type_raw)),
+        cfg["event_defaults"]["type"],
+    )
+    sessions = document.get("Sessions")
+    map_launcher_sessions(launcher, sessions)
+    map_launcher_waiting_players(launcher, event_type, sessions)
+    return launcher
+
+
 @lru_cache(maxsize=1)
 def load_config() -> dict:
     scripts_dir = Path(__file__).resolve().parent
@@ -253,10 +599,14 @@ def load_config() -> dict:
 
 
 class EnvState:
-    def __init__(self, env: dict[str, str], sensitive_keys: set[str]) -> None:
+    def __init__(self, env: dict[str, str], launcher: LauncherImport, sensitive_keys: set[str]) -> None:
         self.env = env
+        self.launcher = launcher
+        self.json_values = launcher.values
+        self.launcher_car_options = launcher.car_options
+        self.launcher_duration_seconds = launcher.duration_seconds
         self.sensitive_keys = sensitive_keys
-        self.warnings: list[str] = []
+        self.warnings: list[str] = list(launcher.warnings)
         self.resolved: dict[str, dict] = {}
 
     def warn(self, message: str) -> None:
@@ -267,12 +617,27 @@ class EnvState:
             value = "***MASKED***" if value else ""
         self.resolved[key] = {"value": value, "source": source, "note": note}
 
+    def source_for(self, key: str) -> str:
+        if key in self.env:
+            return "env"
+        if key in self.json_values:
+            return "json"
+        return "default"
+
+    def has_input(self, key: str) -> bool:
+        return key in self.env or key in self.json_values
+
     def _raw(self, key: str) -> str:
-        return self.env.get(key, "")
+        if key in self.env:
+            return str(self.env.get(key, ""))
+        if key in self.json_values:
+            return str(self.json_values.get(key, ""))
+        return ""
 
     def string(self, key: str, default: str, allow_empty: bool = False) -> str:
         raw = self._raw(key)
-        if key not in self.env:
+        source = self.source_for(key)
+        if source == "default":
             self.set(key, default, "default")
             return default
         value = raw.strip()
@@ -280,21 +645,22 @@ class EnvState:
             self.warn(f"{key}: empty value, using default.")
             self.set(key, default, "fallback", "empty input")
             return default
-        self.set(key, value if value or allow_empty else "", "env")
+        self.set(key, value if value or allow_empty else "", source)
         return value
 
     def integer(self, key: str, default: int) -> int:
         raw = self._raw(key).strip()
-        if key not in self.env or not raw:
+        source = self.source_for(key)
+        if source == "default" or not raw:
             self.set(key, default, "default")
             return default
         try:
-            value = int(raw)
+            value = int(float(raw)) if source == "json" else int(raw)
         except ValueError:
             self.warn(f"{key}: unknown integer '{raw}', using default '{default}'.")
             self.set(key, default, "fallback", f"invalid integer: {raw}")
             return default
-        self.set(key, value, "env")
+        self.set(key, value, source)
         return value
 
     def integer_in_range(self, key: str, default: int, minimum: int, maximum: int) -> int:
@@ -307,14 +673,15 @@ class EnvState:
 
     def boolean(self, key: str, default: bool) -> bool:
         raw = self._raw(key).strip().lower()
-        if key not in self.env or not raw:
+        source = self.source_for(key)
+        if source == "default" or not raw:
             self.set(key, default, "default")
             return default
         if raw in TRUE_VALUES:
-            self.set(key, True, "env")
+            self.set(key, True, source)
             return True
         if raw in FALSE_VALUES:
-            self.set(key, False, "env")
+            self.set(key, False, source)
             return False
         self.warn(f"{key}: unknown boolean '{raw}', using default '{str(default).lower()}'.")
         self.set(key, default, "fallback", f"invalid boolean: {raw}")
@@ -322,10 +689,11 @@ class EnvState:
 
     def enum(self, key: str, mapping: dict[str, str], default: str) -> str:
         raw = self._raw(key).strip()
-        if key not in self.env or not raw:
+        source = self.source_for(key)
+        if source == "default" or not raw:
             self.set(key, default, "default")
             return default
-        if key in STRICT_TOKEN_ENV_KEYS and token_has_whitespace(raw):
+        if source == "env" and key in STRICT_TOKEN_ENV_KEYS and token_has_whitespace(raw):
             self.warn(f"{key}: spaces are not allowed; use '_' tokens, using default.")
             self.set(key, default, "fallback", f"spaces are not allowed: {raw}")
             return default
@@ -334,7 +702,7 @@ class EnvState:
             self.warn(f"{key}: unknown value '{raw}', using default.")
             self.set(key, default, "fallback", f"invalid enum: {raw}")
             return default
-        self.set(key, mapped, "env")
+        self.set(key, mapped, source)
         return mapped
 
 
@@ -344,6 +712,7 @@ def prepare_state(state: EnvState, cfg: dict) -> None:
         if key not in cfg["supported_keys"] and key.startswith(prefixes):
             state.warn(f"Unknown ENV '{key}' ignored.")
 
+    state.set("SERVER_LAUNCHER_JSON", state.launcher.path, state.launcher.source, state.launcher.note)
     state.string("ACEVO_SERVER_INSTALL_DIR", "/data/server")
     for key, meta in cfg["runtime"]["external_runtime_env"].items():
         state.set(key, state.env.get(key, meta.get("default", "")), "external_runtime", meta.get("note", ""))
@@ -361,25 +730,26 @@ def resolve_track(state: EnvState, cfg: dict, event_type: str) -> dict:
         else:
             fallback = parse_track_token("Nurburgring|Nordschleife|Nordschleife Race|20832", 22)
 
-    raw = state.env.get("EVENT_TRACK", "").strip()
+    raw = state._raw("EVENT_TRACK").strip()
+    source = state.source_for("EVENT_TRACK")
     if not raw:
         state.set("EVENT_TRACK", track_env_token(fallback), "default")
         return fallback
 
-    if token_has_whitespace(raw):
+    if source == "env" and token_has_whitespace(raw):
         state.warn(f"EVENT_TRACK: spaces are not allowed; use '_' tokens, using default for event type '{event_type}'.")
         state.set("EVENT_TRACK", track_env_token(fallback), "fallback", f"spaces are not allowed: {raw}")
         return fallback
 
     track = lookup.get(normalize_label(raw))
     if track is not None:
-        state.set("EVENT_TRACK", track_env_token(track), "env")
+        state.set("EVENT_TRACK", track_env_token(track), source)
         return track
 
-    if "|" in raw:
+    if source == "env" and "|" in raw:
         try:
             custom = parse_track_token(raw, fallback["max_pit_slot"])
-            state.set("EVENT_TRACK", track_env_token(custom), "env")
+            state.set("EVENT_TRACK", track_env_token(custom), source)
             return custom
         except ValueError:
             pass
@@ -404,7 +774,14 @@ def car_matches_label(car: dict, label: str) -> bool:
     display_name = car.get("display_name", "")
     display_label = normalize_label(display_name)
     token_label = normalize_label(car_env_token(display_name))
-    return label == display_label or label == token_label or label in display_label or label in token_label
+    internal_label = normalize_label(car.get("internal_name", ""))
+    return (
+        label == display_label
+        or label == token_label
+        or label == internal_label
+        or label in display_label
+        or label in token_label
+    )
 
 
 def car_label_variants(value: str) -> tuple[str, ...]:
@@ -494,18 +871,19 @@ def set_filter_state(state: EnvState, key: str, raw: str, invalid_count: int) ->
     if not raw.strip():
         state.set(key, "", "default")
         return
-    if token_has_whitespace(raw):
+    source = state.source_for(key)
+    if source == "env" and token_has_whitespace(raw):
         state.set(key, "", "fallback", "spaces are not allowed; use '_' tokens")
         return
     note = "invalid values ignored" if invalid_count else ""
-    state.set(key, raw, "env", note)
+    state.set(key, raw, source, note)
 
 
 def resolve_cars(state: EnvState, cfg: dict) -> list[str]:
-    cars_raw = state.env.get("EVENT_CARS", "").strip()
-    category_raw = state.env.get("EVENT_CAR_CATEGORY", "").strip()
-    ban_cars_raw = state.env.get("EVENT_BAN_CARS", "").strip()
-    ban_category_raw = state.env.get("EVENT_BAN_CAR_CATEGORY", "").strip()
+    cars_raw = state._raw("EVENT_CARS").strip()
+    category_raw = state._raw("EVENT_CAR_CATEGORY").strip()
+    ban_cars_raw = state._raw("EVENT_BAN_CARS").strip()
+    ban_category_raw = state._raw("EVENT_BAN_CAR_CATEGORY").strip()
 
     selected: list[str] = []
     seen: set[str] = set()
@@ -592,6 +970,13 @@ def resolve_sessions(state: EnvState, cfg: dict, event_type: str, race_duration_
                     session["DURATION_SECONDS"] = 0
                     state.set(key, value, "ignored_by_duration_type", "ignored because RACE_DURATION_TYPE=Laps")
                     continue
+                if field == "DURATION_MINUTES" and key not in state.env and prefix in state.launcher_duration_seconds:
+                    seconds = state.launcher_duration_seconds[prefix]
+                    minutes = seconds / 60
+                    session[field] = minutes
+                    session["DURATION_SECONDS"] = seconds
+                    state.set(key, minutes, "json", f"converted from {seconds} seconds in server_launcher.json")
+                    continue
                 if field in SESSION_DATE_RANGES:
                     minimum, maximum = SESSION_DATE_RANGES[field]
                     session[field] = state.integer_in_range(key, int(default), minimum, maximum)
@@ -627,6 +1012,16 @@ def session_time(session: dict) -> dict:
         "minute": int(session["MINUTE"]),
         "second": 0,
         "time_multiplier": int(session["TIME_MULTIPLIER"]),
+    }
+
+
+def selected_car_payload(state: EnvState, car_name: str) -> dict:
+    options = state.launcher_car_options.get(car_name, {})
+    use_json_options = state.resolved.get("EVENT_CARS", {}).get("source") == "json"
+    return {
+        "car_name": car_name,
+        "ballast": int(options.get("ballast", 0)) if use_json_options else 0,
+        "restrictor": float(options.get("restrictor", 0.0)) if use_json_options else 0.0,
     }
 
 
@@ -678,10 +1073,8 @@ def build_server_doc(state: EnvState, cfg: dict, event_type: str, selected_cars:
             allow_empty=True,
         ),
         "max_players": max_players,
-        "allowed_cars_list_full": [
-            {"car_name": car_name, "ballast": 0.0, "restrictor": 0.0} for car_name in selected_cars
-        ],
-        "type": defaults["server_type"],
+        "allowed_cars_list_full": [selected_car_payload(state, car_name) for car_name in selected_cars],
+        "type": state.string("SERVER_TYPE", defaults["server_type"]),
         "cycle": state.boolean("SERVER_CYCLE_ENABLED", bool(defaults["cycle_enabled"])),
         "admin_password": state.string("SERVER_ADMIN_PASSWORD", defaults["admin_password"], allow_empty=True),
         "pi_min": 0.0,
@@ -689,12 +1082,12 @@ def build_server_doc(state: EnvState, cfg: dict, event_type: str, selected_cars:
         "property_1": False,
         "property_2": False,
         "property_3": False,
-        "entry_list_server_url": "",
+        "entry_list_server_url": state.string("SERVER_ENTRY_LIST_URL", "", allow_empty=True),
         "results_post_url": state.string("SERVER_RESULTS_POST_URL", "", allow_empty=True),
         "token": state.string("SERVER_RESULTS_TOKEN", "", allow_empty=True),
         "tuning_allowed": True,
-        "entry_list_path": "",
-        "results_path": "",
+        "entry_list_path": state.string("SERVER_ENTRY_LIST_PATH", "", allow_empty=True),
+        "results_path": state.string("SERVER_RESULTS_PATH", "", allow_empty=True),
     }
 
 
@@ -788,7 +1181,8 @@ def build_report(cfg: dict, state: EnvState, server_doc: dict, season_doc: dict)
 
 def build_documents_with_report(env: dict[str, str]) -> tuple[dict, dict, list[str], dict]:
     cfg = load_config()
-    state = EnvState(env, set(cfg["runtime"]["sensitive_env_keys"]))
+    launcher = load_server_launcher_json(env, cfg)
+    state = EnvState(env, launcher, set(cfg["runtime"]["sensitive_env_keys"]))
     prepare_state(state, cfg)
 
     event_type = state.enum("EVENT_TYPE", cfg["mappings"]["event_type"], cfg["event_defaults"]["type"])

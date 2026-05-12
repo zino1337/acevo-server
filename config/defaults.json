@@ -65,7 +65,7 @@
       "hour": 16,
       "minute": 0,
       "time_multiplier": 1,
-      "max_wait_to_box_seconds": 10,
+      "max_wait_to_box_seconds": 60,
       "overtime_waiting_next_session_seconds": 10
     }
   }
