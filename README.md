@@ -73,16 +73,12 @@ docker compose up -d
 docker compose -f docker-compose-race.yml up -d
 ```
 
-## Using `server_launcher.json`
-
-You can export `server_launcher.json` from the official Windows dedicated server tool and mount it into the container:
+You can export a `server_launcher.json` from the official Windows dedicated server tool and mount it into the container (environment variables override values from json):
 
 ```yaml
 volumes:
   - ./server_launcher.json:/data/server_launcher.json:ro
 ```
-
-Environment variables override values from `server_launcher.json`.<br/>
 
 ## Environment Variables
 
