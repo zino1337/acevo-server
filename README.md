@@ -48,10 +48,13 @@ docker compose up -d
 
 The Steam volume keeps SteamCMD login state so Steam Guard is not required on every restart of the server.
 
-| Host Path         | Container Path             | Purpose                        |
-| ----------------- | -------------------------- | ------------------------------ |
-| `./volumes/data`  | `/data`                    | Server data                    |
-| `./volumes/steam` | `/root/.local/share/Steam` | SteamCMD cache and login state |
+| Host Path                | Container Path               | Purpose                                   |
+| ------------------------ | ---------------------------- | ----------------------------------------- |
+| `./volumes/data`         | `/data`                      | Server data                               |
+| `./volumes/steam`        | `/root/.local/share/Steam`   | SteamCMD cache and login state            |
+| `./server_launcher.json` | `/data/server_launcher.json` | Optional official Windows launcher config |
+
+Environment variables override values from `server_launcher.json`.
 
 ## Ports
 
@@ -71,13 +74,6 @@ docker compose up -d
 
 # Race Weekend server
 docker compose -f docker-compose-race.yml up -d
-```
-
-You can export a `server_launcher.json` from the official Windows dedicated server tool and mount it into the container (environment variables override values from json):
-
-```yaml
-volumes:
-  - ./server_launcher.json:/data/server_launcher.json:ro
 ```
 
 ## Environment Variables
