@@ -152,13 +152,6 @@ Set or adjust in `.env` or in the docker compose file.
 | `RACE_OVERTIME_WAITING_NEXT_SESSION_SECONDS`     | `10`                           | integer | Overtime before the next session in seconds, used for `Race_Weekend`.                                          |
 | `RACE_TIME_MULTIPLIER`                           | `1`                            | integer | In-game time multiplier, used for `Race_Weekend`.                                                              |
 
-Example race start wait:
-
-```env
-RACE_MIN_WAITING_FOR_PLAYERS_SECONDS=30
-RACE_MAX_WAITING_FOR_PLAYERS_SECONDS=60
-```
-
 ## Car Categories
 
 Use these strings for the environment variable `EVENT_CAR_CATEGORY`.<br/>

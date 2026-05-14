@@ -113,13 +113,6 @@ This section is shortened on Docker Hub. See the full table in the GitHub README
 | `AUTO_UPDATE`                          | `true`                         | Updates the dedicated server before startup.     |
 | `ACEVO_FORCE_SOFTWARE_RENDERING`       | `true`                         | Enables default no-GPU host compatibility.       |
 
-Example race start wait:
-
-```env
-RACE_MIN_WAITING_FOR_PLAYERS_SECONDS=30
-RACE_MAX_WAITING_FOR_PLAYERS_SECONDS=60
-```
-
 ## Car Categories
 
 This section is shortened on Docker Hub. See the full table in the GitHub README: https://github.com/zino1337/acevo-server#car-categories
