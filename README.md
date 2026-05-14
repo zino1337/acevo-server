@@ -92,8 +92,6 @@ Set or adjust in `.env` or in the docker compose file.
 | `SERVER_DRIVER_PASSWORD`                         | empty                          | string  | Driver password.                                                                                               |
 | `SERVER_HTTP_PORT`                               | `8080`                         | integer | HTTP/listing port exposed by the server.                                                                       |
 | `SERVER_MAX_PLAYERS`                             | `20`                           | integer | Maximum player slots; downscaled to the selected track maximum if configured too high.                         |
-| `SERVER_MAX_WAITING_PLAYERS`                     | `30`                           | integer | Maximum players waiting before a session starts.                                                               |
-| `SERVER_MIN_WAITING_PLAYERS`                     | `10`                           | integer | Minimum players waiting before a session starts.                                                               |
 | `SERVER_NAME`                                    | `AC EVO Nordschleife Trackday` | string  | Public server name.                                                                                            |
 | `SERVER_RESULTS_POST_URL`                        | empty                          | string  | Experimental native result POST endpoint; upstream POST format is not guaranteed documented.                   |
 | `SERVER_RESULTS_TOKEN`                           | empty                          | string  | Optional token for the native result POST endpoint.                                                            |
@@ -146,11 +144,20 @@ Set or adjust in `.env` or in the docker compose file.
 | `RACE_DURATION_MINUTES`                          | `25`                           | integer | Race duration in minutes when `RACE_DURATION_TYPE=Time`.                                                       |
 | `RACE_DURATION_LAPS`                             | `10`                           | integer | Race duration in laps when `RACE_DURATION_TYPE=Laps`.                                                          |
 | `RACE_DURATION_TYPE`                             | `Time`                         | enum    | Race duration mode: `Time` or `Laps`.                                                                          |
+| `RACE_MIN_WAITING_FOR_PLAYERS_SECONDS`           | `60`                           | integer | Minimum waiting-for-players time before race start, in seconds.                                                |
+| `RACE_MAX_WAITING_FOR_PLAYERS_SECONDS`           | `60`                           | integer | Maximum waiting-for-players time before race start, in seconds; clamped up to min if smaller.                  |
 | `RACE_HOUR`                                      | `16`                           | integer | Race start hour, used for `Race_Weekend`.                                                                      |
 | `RACE_MAX_WAIT_TO_BOX_SECONDS`                   | `60`                           | integer | Max wait to box in seconds, used for `Race_Weekend`.                                                           |
 | `RACE_MINUTE`                                    | `0`                            | integer | Race start minute, used for `Race_Weekend`.                                                                    |
 | `RACE_OVERTIME_WAITING_NEXT_SESSION_SECONDS`     | `10`                           | integer | Overtime before the next session in seconds, used for `Race_Weekend`.                                          |
 | `RACE_TIME_MULTIPLIER`                           | `1`                            | integer | In-game time multiplier, used for `Race_Weekend`.                                                              |
+
+Example race start wait:
+
+```env
+RACE_MIN_WAITING_FOR_PLAYERS_SECONDS=30
+RACE_MAX_WAITING_FOR_PLAYERS_SECONDS=60
+```
 
 ## Car Categories
 

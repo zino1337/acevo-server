@@ -249,10 +249,44 @@ class LaunchPayloadTests(unittest.TestCase):
         self.assertEqual(game_config["practice_duration"], 10800)
         self.assertEqual(game_config["race_duration"], 1500)
         self.assertEqual(game_config["race_max_wait_to_box"], 60)
+        self.assertEqual(game_config["min_waiting_for_players"], 60)
+        self.assertEqual(game_config["max_waiting_for_players"], 60)
         self.assertEqual(resolved(report, "PRACTICE_DURATION_MINUTES")["value"], 180)
         self.assertIn("converted to 10800 seconds", resolved(report, "PRACTICE_DURATION_MINUTES")["note"])
         self.assertEqual(resolved(report, "RACE_DURATION_MINUTES")["value"], 25)
         self.assertIn("converted to 1500 seconds", resolved(report, "RACE_DURATION_MINUTES")["note"])
+        self.assertEqual(resolved(report, "RACE_MIN_WAITING_FOR_PLAYERS_SECONDS")["value"], 60)
+        self.assertEqual(resolved(report, "RACE_MAX_WAITING_FOR_PLAYERS_SECONDS")["value"], 60)
+
+    def test_race_waiting_for_players_seconds_override(self):
+        _, season_doc, warnings, report = launch_payloads.build_documents_with_report(
+            {
+                "EVENT_TYPE": "Race_Weekend",
+                "RACE_MIN_WAITING_FOR_PLAYERS_SECONDS": "30",
+                "RACE_MAX_WAITING_FOR_PLAYERS_SECONDS": "90",
+            }
+        )
+        self.assertEqual(warnings, [])
+        game_config = season_doc["game_config"]
+        self.assertEqual(game_config["min_waiting_for_players"], 30)
+        self.assertEqual(game_config["max_waiting_for_players"], 90)
+        self.assertEqual(resolved(report, "RACE_MIN_WAITING_FOR_PLAYERS_SECONDS")["source"], "env")
+        self.assertEqual(resolved(report, "RACE_MAX_WAITING_FOR_PLAYERS_SECONDS")["source"], "env")
+
+    def test_race_waiting_for_players_max_clamps_to_min(self):
+        _, season_doc, warnings, report = launch_payloads.build_documents_with_report(
+            {
+                "EVENT_TYPE": "Race_Weekend",
+                "RACE_MIN_WAITING_FOR_PLAYERS_SECONDS": "120",
+                "RACE_MAX_WAITING_FOR_PLAYERS_SECONDS": "30",
+            }
+        )
+        self.assertTrue(any("RACE_MAX_WAITING_FOR_PLAYERS_SECONDS" in warning for warning in warnings))
+        game_config = season_doc["game_config"]
+        self.assertEqual(game_config["min_waiting_for_players"], 120)
+        self.assertEqual(game_config["max_waiting_for_players"], 120)
+        self.assertEqual(resolved(report, "RACE_MAX_WAITING_FOR_PLAYERS_SECONDS")["value"], 120)
+        self.assertEqual(resolved(report, "RACE_MAX_WAITING_FOR_PLAYERS_SECONDS")["source"], "fallback")
 
     def test_race_duration_laps(self):
         _, season_doc_default, warnings_default, report_default = launch_payloads.build_documents_with_report(
@@ -331,6 +365,8 @@ class LaunchPayloadTests(unittest.TestCase):
 
         self.assertEqual(resolved(report, "SERVER_NAME")["source"], "json")
         self.assertEqual(resolved(report, "EVENT_CARS")["source"], "json")
+        self.assertEqual(resolved(report, "RACE_MIN_WAITING_FOR_PLAYERS_SECONDS")["source"], "json")
+        self.assertEqual(resolved(report, "RACE_MAX_WAITING_FOR_PLAYERS_SECONDS")["source"], "json")
         self.assertEqual(resolved(report, "SERVER_LAUNCHER_JSON")["source"], "env")
 
     def test_env_overrides_server_launcher_json(self):
@@ -393,7 +429,7 @@ class LaunchPayloadTests(unittest.TestCase):
         self.assertTrue(any("no valid selected cars found" in warning for warning in warnings))
         self.assertEqual(selected_car_names(server_doc), all_car_names())
 
-    def test_server_launcher_json_inconsistent_waiting_players_warns_and_uses_primary_session(self):
+    def test_server_launcher_json_uses_race_waiting_for_players_values(self):
         document = launcher_document()
         document["Sessions"]["PracticeSession"]["MinWaitingForPlayers"] = 1
         document["Sessions"]["PracticeSession"]["MaxWaitingForPlayers"] = 3
@@ -405,7 +441,7 @@ class LaunchPayloadTests(unittest.TestCase):
                 {"SERVER_LAUNCHER_JSON": str(path)}
             )
 
-        self.assertTrue(any("per-session waiting player values differ" in warning for warning in warnings))
+        self.assertFalse(any("per-session waiting player values differ" in warning for warning in warnings))
         self.assertEqual(season_doc["game_config"]["min_waiting_for_players"], 5)
         self.assertEqual(season_doc["game_config"]["max_waiting_for_players"], 9)
 
@@ -588,12 +624,16 @@ class LaunchPayloadTests(unittest.TestCase):
                 "RACE_DURATION": "1500",
                 "PRACTICE_MAX_WAIT_TO_BOX": "10",
                 "PRACTICE_OVERTIME_WAITING_NEXT_SESSION": "10",
+                "SERVER_MIN_WAITING_PLAYERS": "30",
+                "SERVER_MAX_WAITING_PLAYERS": "60",
             }
         )
         self.assertTrue(any("PRACTICE_DURATION" in warning for warning in warnings))
         self.assertTrue(any("RACE_DURATION" in warning for warning in warnings))
         self.assertTrue(any("PRACTICE_MAX_WAIT_TO_BOX" in warning for warning in warnings))
         self.assertTrue(any("PRACTICE_OVERTIME_WAITING_NEXT_SESSION" in warning for warning in warnings))
+        self.assertTrue(any("SERVER_MIN_WAITING_PLAYERS" in warning for warning in warnings))
+        self.assertTrue(any("SERVER_MAX_WAITING_PLAYERS" in warning for warning in warnings))
 
     def test_payload_encoding_roundtrip(self):
         server_doc, season_doc, warnings = launch_payloads.build_documents(

@@ -58,8 +58,6 @@ ENV_BASE_KEYS = (
     "SERVER_DRIVER_PASSWORD",
     "SERVER_SPECTATOR_PASSWORD",
     "SERVER_ADMIN_PASSWORD",
-    "SERVER_MIN_WAITING_PLAYERS",
-    "SERVER_MAX_WAITING_PLAYERS",
     "SERVER_RESULTS_POST_URL",
     "SERVER_RESULTS_TOKEN",
     "EVENT_TYPE",
@@ -73,6 +71,8 @@ ENV_BASE_KEYS = (
     "EVENT_BAN_CAR_CATEGORY",
     "RACE_DURATION_TYPE",
     "RACE_DURATION_LAPS",
+    "RACE_MIN_WAITING_FOR_PLAYERS_SECONDS",
+    "RACE_MAX_WAITING_FOR_PLAYERS_SECONDS",
     "ACEVO_SERVER_INSTALL_DIR",
 )
 STRICT_TOKEN_ENV_KEYS = {
@@ -373,52 +373,30 @@ def map_launcher_cars(launcher: LauncherImport, cfg: dict, event: dict) -> None:
         launcher.warnings.append("server_launcher.json: no valid selected cars found, using defaults.")
 
 
-def map_launcher_waiting_players(launcher: LauncherImport, event_type: str, sessions: dict) -> None:
+def map_launcher_waiting_for_players(launcher: LauncherImport, sessions: dict) -> None:
     if not isinstance(sessions, dict):
         return
 
-    primary = "RaceSession" if event_type == "GameModeType_RACE_WEEKEND" else "PracticeSession"
-    session_values: dict[str, tuple[int | None, int | None]] = {}
-
-    for session_name, session in sessions.items():
-        if not isinstance(session, dict):
-            continue
-        minimum = (
-            int_from_launcher(
-                session.get("MinWaitingForPlayers"),
-                f"Sessions.{session_name}.MinWaitingForPlayers",
-                launcher,
-            )
-            if "MinWaitingForPlayers" in session
-            else None
-        )
-        maximum = (
-            int_from_launcher(
-                session.get("MaxWaitingForPlayers"),
-                f"Sessions.{session_name}.MaxWaitingForPlayers",
-                launcher,
-            )
-            if "MaxWaitingForPlayers" in session
-            else None
-        )
-        if minimum is not None or maximum is not None:
-            session_values[session_name] = (minimum, maximum)
-
-    if not session_values:
+    session = sessions.get("RaceSession")
+    if not isinstance(session, dict):
         return
 
-    distinct = {values for values in session_values.values()}
-    if len(distinct) > 1:
-        launcher.warnings.append(
-            "server_launcher.json: per-session waiting player values differ; "
-            f"using {primary} because payload supports one global value."
+    if "MinWaitingForPlayers" in session:
+        minimum = int_from_launcher(
+            session.get("MinWaitingForPlayers"),
+            "Sessions.RaceSession.MinWaitingForPlayers",
+            launcher,
         )
-
-    selected = session_values.get(primary) or next(iter(session_values.values()))
-    if selected[0] is not None:
-        launcher.values["SERVER_MIN_WAITING_PLAYERS"] = selected[0]
-    if selected[1] is not None:
-        launcher.values["SERVER_MAX_WAITING_PLAYERS"] = selected[1]
+        if minimum is not None:
+            launcher.values["RACE_MIN_WAITING_FOR_PLAYERS_SECONDS"] = minimum
+    if "MaxWaitingForPlayers" in session:
+        maximum = int_from_launcher(
+            session.get("MaxWaitingForPlayers"),
+            "Sessions.RaceSession.MaxWaitingForPlayers",
+            launcher,
+        )
+        if maximum is not None:
+            launcher.values["RACE_MAX_WAITING_FOR_PLAYERS_SECONDS"] = maximum
 
 
 def map_launcher_sessions(launcher: LauncherImport, sessions: dict) -> None:
@@ -533,14 +511,9 @@ def load_server_launcher_json(env: dict[str, str], cfg: dict) -> LauncherImport:
         if not any(key in env for key in ("EVENT_CARS", "EVENT_CAR_CATEGORY")):
             map_launcher_cars(launcher, cfg, event)
 
-    event_type_raw = env.get("EVENT_TYPE", launcher.values.get("EVENT_TYPE", cfg["event_defaults"]["type"]))
-    event_type = normalize_enum_map(MAPPINGS["event_type"]).get(
-        normalize_label(str(event_type_raw)),
-        cfg["event_defaults"]["type"],
-    )
     sessions = document.get("Sessions")
     map_launcher_sessions(launcher, sessions)
-    map_launcher_waiting_players(launcher, event_type, sessions)
+    map_launcher_waiting_for_players(launcher, sessions)
     return launcher
 
 
@@ -1115,13 +1088,27 @@ def build_game_config(
             "ignored_by_duration_type",
             "ignored because RACE_DURATION_TYPE=Time",
         )
-    defaults = cfg["server_defaults"]
-    game["min_waiting_for_players"] = state.integer(
-        "SERVER_MIN_WAITING_PLAYERS", int(defaults.get("min_waiting_players", 10))
+    defaults = cfg["session_defaults"]["RACE"]
+    min_waiting = state.integer(
+        "RACE_MIN_WAITING_FOR_PLAYERS_SECONDS", int(defaults.get("min_waiting_for_players_seconds", 60))
     )
-    game["max_waiting_for_players"] = state.integer(
-        "SERVER_MAX_WAITING_PLAYERS", int(defaults.get("max_waiting_players", 30))
+    max_waiting = state.integer(
+        "RACE_MAX_WAITING_FOR_PLAYERS_SECONDS", int(defaults.get("max_waiting_for_players_seconds", 60))
     )
+    if max_waiting < min_waiting:
+        state.warn(
+            "RACE_MAX_WAITING_FOR_PLAYERS_SECONDS: "
+            f"{max_waiting} is smaller than RACE_MIN_WAITING_FOR_PLAYERS_SECONDS {min_waiting}; using {min_waiting}."
+        )
+        max_waiting = min_waiting
+        state.set(
+            "RACE_MAX_WAITING_FOR_PLAYERS_SECONDS",
+            max_waiting,
+            "fallback",
+            f"clamped to RACE_MIN_WAITING_FOR_PLAYERS_SECONDS={min_waiting}",
+        )
+    game["min_waiting_for_players"] = min_waiting
+    game["max_waiting_for_players"] = max_waiting
     return game
 
 
