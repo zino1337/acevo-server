@@ -13,7 +13,7 @@ Not affiliated with Kunos Simulazioni or Assetto Corsa.
 
 ## Features
 
-- Environment variables for easy server and event configuration
+- Environment variables or server_launcher.json for easy server configuration
 - SteamCMD auto-update
 - Practice and Race Weekend support
 - Linux server via Proton

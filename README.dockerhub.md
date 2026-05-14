@@ -16,7 +16,7 @@ Full README: https://github.com/zino1337/acevo-server
 
 ## Features
 
-- Environment variables for easy server and event configuration
+- Environment variables or server_launcher.json for easy server configuration
 - SteamCMD auto-update
 - Practice and Race Weekend support
 - Linux server via Proton
