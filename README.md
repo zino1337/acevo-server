@@ -48,10 +48,13 @@ docker compose up -d
 
 The Steam volume keeps SteamCMD login state so Steam Guard is not required on every restart of the server.
 
-| Host Path         | Container Path             | Purpose                        |
-| ----------------- | -------------------------- | ------------------------------ |
-| `./volumes/data`  | `/data`                    | Server data                    |
-| `./volumes/steam` | `/root/.local/share/Steam` | SteamCMD cache and login state |
+| Host Path                | Container Path               | Purpose                                   |
+| ------------------------ | ---------------------------- | ----------------------------------------- |
+| `./volumes/data`         | `/data`                      | Server data                               |
+| `./volumes/steam`        | `/root/.local/share/Steam`   | SteamCMD cache and login state            |
+| `./server_launcher.json` | `/data/server_launcher.json` | Optional official Windows launcher config |
+
+Environment variables override values from `server_launcher.json`.
 
 ## Ports
 
@@ -83,13 +86,12 @@ Set or adjust in `.env` or in the docker compose file.
 | `AUTO_UPDATE`                                    | `true`                         | boolean | Updates the dedicated server before startup.                                                                   |
 | `PGID`                                           | `0`                            | integer | Group ID used for mounted volume ownership.                                                                    |
 | `PUID`                                           | `0`                            | integer | User ID used for mounted volume ownership.                                                                     |
+| `SERVER_LAUNCHER_JSON`                           | `/data/server_launcher.json`   | path    | Optional official tool config loaded as base config when present; ENV values override it.                      |
 | `SERVER_ADMIN_PASSWORD`                          | empty                          | string  | Admin password.                                                                                                |
 | `SERVER_CYCLE_ENABLED`                           | `true`                         | boolean | Enables session/event cycling when supported by the server.                                                    |
 | `SERVER_DRIVER_PASSWORD`                         | empty                          | string  | Driver password.                                                                                               |
 | `SERVER_HTTP_PORT`                               | `8080`                         | integer | HTTP/listing port exposed by the server.                                                                       |
 | `SERVER_MAX_PLAYERS`                             | `20`                           | integer | Maximum player slots; downscaled to the selected track maximum if configured too high.                         |
-| `SERVER_MAX_WAITING_PLAYERS`                     | `30`                           | integer | Maximum players waiting before a session starts.                                                               |
-| `SERVER_MIN_WAITING_PLAYERS`                     | `10`                           | integer | Minimum players waiting before a session starts.                                                               |
 | `SERVER_NAME`                                    | `AC EVO Nordschleife Trackday` | string  | Public server name.                                                                                            |
 | `SERVER_RESULTS_POST_URL`                        | empty                          | string  | Experimental native result POST endpoint; upstream POST format is not guaranteed documented.                   |
 | `SERVER_RESULTS_TOKEN`                           | empty                          | string  | Optional token for the native result POST endpoint.                                                            |
@@ -142,8 +144,10 @@ Set or adjust in `.env` or in the docker compose file.
 | `RACE_DURATION_MINUTES`                          | `25`                           | integer | Race duration in minutes when `RACE_DURATION_TYPE=Time`.                                                       |
 | `RACE_DURATION_LAPS`                             | `10`                           | integer | Race duration in laps when `RACE_DURATION_TYPE=Laps`.                                                          |
 | `RACE_DURATION_TYPE`                             | `Time`                         | enum    | Race duration mode: `Time` or `Laps`.                                                                          |
+| `RACE_MIN_WAITING_FOR_PLAYERS_SECONDS`           | `60`                           | integer | Minimum waiting-for-players time before race start, in seconds.                                                |
+| `RACE_MAX_WAITING_FOR_PLAYERS_SECONDS`           | `60`                           | integer | Maximum waiting-for-players time before race start, in seconds; clamped up to min if smaller.                  |
 | `RACE_HOUR`                                      | `16`                           | integer | Race start hour, used for `Race_Weekend`.                                                                      |
-| `RACE_MAX_WAIT_TO_BOX_SECONDS`                   | `10`                           | integer | Max wait to box in seconds, used for `Race_Weekend`.                                                           |
+| `RACE_MAX_WAIT_TO_BOX_SECONDS`                   | `60`                           | integer | Max wait to box in seconds, used for `Race_Weekend`.                                                           |
 | `RACE_MINUTE`                                    | `0`                            | integer | Race start minute, used for `Race_Weekend`.                                                                    |
 | `RACE_OVERTIME_WAITING_NEXT_SESSION_SECONDS`     | `10`                           | integer | Overtime before the next session in seconds, used for `Race_Weekend`.                                          |
 | `RACE_TIME_MULTIPLIER`                           | `1`                            | integer | In-game time multiplier, used for `Race_Weekend`.                                                              |
@@ -171,98 +175,98 @@ You can set multiple car categories separated by commas, like `EVENT_CAR_CATEGOR
 Use these strings for the environment variable `EVENT_CARS`.<br/>
 You can set multiple cars separated by commas, like `EVENT_CARS=Abarth_695_Biposto,Caterham_Academy`.
 
-| Name                                        | Description                                                     |
-| ------------------------------------------- | --------------------------------------------------------------- |
-| `all`                                       | **[ All Cars ]**                                                |
-| `Abarth_695_Biposto`                        | Abarth 695 Biposto - Standard                                   |
-| `Alfa_Romeo_75_Turbo_Evoluzione`            | Alfa Romeo 75 Turbo Evoluzione - Standard                       |
-| `Alfa_Romeo_Giulia_GTAm`                    | Alfa Romeo Giulia GTAm - Standard                               |
-| `Alfa_Romeo_Giulia_Sprint_GTA`              | Alfa Romeo Giulia Sprint GTA - Standard                         |
-| `Alfa_Romeo_Junior`                         | Alfa Romeo Junior - Elettrica 280 CV Veloce                     |
-| `Alpine_A110_S`                             | Alpine A110 S - Aero Package                                    |
-| `Alpine_A290_Beta`                          | Alpine A290 Beta - Standard                                     |
-| `Audi_R8_LMS_GT4_Evo`                       | Audi R8 LMS GT4 Evo - GT4                                       |
-| `Audi_RS_3_Sportback`                       | Audi RS 3 Sportback - Sportback                                 |
-| `Audi_RS_6_Avant`                           | Audi RS 6 Avant - Standard                                      |
-| `Audi_Sport_quattro`                        | Audi Sport quattro - Standard                                   |
-| `BMW_M2_Coupe`                              | BMW M2 Coupe - Performance                                      |
-| `BMW_M2_Coupe`                              | BMW M2 Coupe - Standard                                         |
-| `BMW_M2_CS_Racing`                          | BMW M2 CS Racing - 350                                          |
-| `BMW_M2_CS_Racing`                          | BMW M2 CS Racing - 450                                          |
-| `BMW_M3_E30_Sport_Evo_(Evolution_III)`      | BMW M3 E30 Sport Evo (Evolution III) - Standard                 |
-| `BMW_M3_E46_CSL`                            | BMW M3 E46 CSL - Standard                                       |
-| `BMW_M4_CSL`                                | BMW M4 CSL - Standard                                           |
-| `BMW_M4_GT3_Evo`                            | BMW M4 GT3 Evo - GT3                                            |
-| `BMW_M8_Competition`                        | BMW M8 Competition - Standard                                   |
-| `Caterham_485_CSR`                          | Caterham 485 CSR - Final Edition                                |
-| `Caterham_485_CSR`                          | Caterham 485 CSR - Road                                         |
-| `Caterham_485_CSR`                          | Caterham 485 CSR - Track                                        |
-| `Caterham_Academy`                          | Caterham Academy - Academy                                      |
-| `Chevrolet_Camaro_ZL1`                      | Chevrolet Camaro ZL1 - 1LE                                      |
-| `Chevrolet_Camaro_ZL1`                      | Chevrolet Camaro ZL1 - Standard                                 |
-| `Dallara_EXP`                               | Dallara EXP - Standard                                          |
-| `Dallara_Stradale`                          | Dallara Stradale - Coupe                                        |
-| `Dallara_Stradale`                          | Dallara Stradale - Spider                                       |
-| `Dallara_Stradale`                          | Dallara Stradale - Track                                        |
-| `Ferrari_288_GTO`                           | Ferrari 288 GTO - Standard                                      |
-| `Ferrari_296_GT3`                           | Ferrari 296 GT3 - GT3                                           |
-| `Ferrari_296_GTB`                           | Ferrari 296 GTB - Assetto Fiorano                               |
-| `Ferrari_296_GTB`                           | Ferrari 296 GTB - Standard                                      |
-| `Ferrari_488_Challenge_Evo`                 | Ferrari 488 Challenge Evo - Ferrari Challenge                   |
-| `Ferrari_Daytona_SP3`                       | Ferrari Daytona SP3 - Standard                                  |
-| `Ferrari_F2004`                             | Ferrari F2004 - Standard                                        |
-| `Ferrari_F40_LM`                            | Ferrari F40 LM - Standard                                       |
-| `Ferrari_SF_25`                             | Ferrari SF-25 - F1 2025                                         |
-| `Ford_Escort_RS_Cosworth`                   | Ford Escort RS Cosworth - Standard                              |
-| `Ford_Mustang_GT3`                          | Ford Mustang GT3 - GT3                                          |
-| `Honda_NSX_R_92R`                           | Honda NSX-R 92R - Standard                                      |
-| `Honda_S2000_AP1`                           | Honda S2000 AP1 - Standard                                      |
-| `Hyundai_i30_N_Hatchback`                   | Hyundai i30 N Hatchback - Performance                           |
-| `Hyundai_i30_N_Hatchback`                   | Hyundai i30 N Hatchback - Performance N Limited                 |
-| `Lamborghini_Countach_LP5000_QV`            | Lamborghini Countach LP5000 QV - LP5000 QV                      |
-| `Lamborghini_Huracan_ST_EVO2`               | Lamborghini Huracan ST EVO2 - Super Trofeo                      |
-| `Lamborghini_Huracan_STO`                   | Lamborghini Huracan STO - Road                                  |
-| `Lamborghini_Huracan_STO`                   | Lamborghini Huracan STO - Trackday                              |
-| `Lancia_Delta_HF_integrale_Evoluzione_II`   | Lancia Delta HF integrale Evoluzione II - Evo 3 "Violet"        |
-| `Lancia_Delta_HF_integrale_Evoluzione_II`   | Lancia Delta HF integrale Evoluzione II - Standard              |
-| `Lotus_Emira`                               | Lotus Emira - Sports                                            |
-| `Lotus_Emira`                               | Lotus Emira - Touring                                           |
-| `Lotus_Exige_V6_Cup`                        | Lotus Exige V6 Cup - Lotus Motorsport                           |
-| `Lotus_Exige_V6_Cup`                        | Lotus Exige V6 Cup - Standard                                   |
-| `Maserati_GT2`                              | Maserati GT2 - GT2                                              |
-| `Mazda_MX_5_NA`                             | Mazda MX-5 NA - RS Limited                                      |
-| `Mazda_MX_5_NA`                             | Mazda MX-5 NA - Standard                                        |
-| `Mazda_MX_5_ND_Cup`                         | Mazda MX-5 ND Cup - Global Cup ND1                              |
-| `Mazda_MX_5_ND_Cup`                         | Mazda MX-5 ND Cup - Global Cup ND2                              |
-| `Mercedes_AMG_GT2`                          | Mercedes-AMG GT2 - GT2                                          |
-| `Mercedes_Benz_190E_25_16_Evo_II`           | Mercedes-Benz 190E 2.5-16 Evo II - Standard                     |
-| `Mini_John_Cooper_S`                        | Mini John Cooper S - Standard                                   |
-| `Mini_John_Cooper_S`                        | Mini John Cooper S - Tune                                       |
-| `Peugeot_205_T16`                           | Peugeot 205 T16 - Standard                                      |
-| `Porsche_718_Cayman_GT4_Clubsport`          | Porsche 718 Cayman GT4 Clubsport - GT4                          |
-| `Porsche_718_Cayman_GT4_RS`                 | Porsche 718 Cayman GT4 RS - Standard                            |
-| `Porsche_718_Cayman_GT4_RS`                 | Porsche 718 Cayman GT4 RS - Weissach                            |
-| `Porsche_911_GT3_Cup_(992)`                 | Porsche 911 GT3 Cup (992) - ABS                                 |
-| `Porsche_911_GT3_Cup_(992)`                 | Porsche 911 GT3 Cup (992) - ABS TC                              |
-| `Porsche_911_GT3_Cup_(992)`                 | Porsche 911 GT3 Cup (992) - No ABS No TC                        |
-| `Porsche_911_GT3_R_Rennsport_(992)`         | Porsche 911 GT3 R Rennsport (992) - GT3                         |
-| `Porsche_911_GT3_R_Rennsport_(992)`         | Porsche 911 GT3 R Rennsport (992) - Unrestricted                |
-| `Porsche_911_GT3_RS_(992)`                  | Porsche 911 GT3 RS (992) - Clubsport                            |
-| `Porsche_911_GT3_RS_(992)`                  | Porsche 911 GT3 RS (992) - Weissach                             |
-| `Porsche_911_Turbo_36_(964)`                | Porsche 911 Turbo 3.6 (964) - Standard                          |
-| `Porsche_911_Turbo_36_(964)`                | Porsche 911 Turbo 3.6 (964) - X88                               |
-| `Renault_5_GT_Turbo`                        | Renault 5 GT Turbo - Standard                                   |
-| `Toyota_GR86`                               | Toyota GR86 - Hakone Edition                                    |
-| `Toyota_GR86`                               | Toyota GR86 - Standard                                          |
-| `Toyota_GR86`                               | Toyota GR86 - Trueno Edition                                    |
-| `Toyota_Sprinter_Trueno_1600GT_Apex_(AE86)` | Toyota Sprinter Trueno 1600GT-Apex (AE86) - Anime Tribute       |
-| `Toyota_Sprinter_Trueno_1600GT_Apex_(AE86)` | Toyota Sprinter Trueno 1600GT-Apex (AE86) - Kouki               |
-| `Toyota_Sprinter_Trueno_1600GT_Apex_(AE86)` | Toyota Sprinter Trueno 1600GT-Apex (AE86) - Kouki Black Limited |
-| `Toyota_Sprinter_Trueno_1600GT_Apex_(AE86)` | Toyota Sprinter Trueno 1600GT-Apex (AE86) - Zenki               |
-| `Toyota_Supra_MKIV`                         | Toyota Supra MKIV - Drift                                       |
-| `Toyota_Supra_MKIV`                         | Toyota Supra MKIV - Standard                                    |
-| `Volkswagen_Golf_8_GTI`                     | Volkswagen Golf 8 GTI - Clubsport                               |
-| `Volkswagen_Golf_GTI_Mk1`                   | Volkswagen Golf GTI Mk1 - Standard                              |
+| Name                                      | Description                                                     | Score |
+| ----------------------------------------- | --------------------------------------------------------------- | ----- |
+| `all`                                     | **[ All Cars ]**                                                | -     |
+| `Abarth_695_Biposto`                      | Abarth 695 Biposto - Standard                                   | 9.9   |
+| `Alfa_Romeo_75_Turbo_Evoluzione`          | Alfa Romeo 75 Turbo Evoluzione - Standard                       | 8.2   |
+| `Alfa_Romeo_Giulia_GTAm`                  | Alfa Romeo Giulia GTAm - Standard                               | 13.4  |
+| `Alfa_Romeo_Giulia_Sprint_GTA`            | Alfa Romeo Giulia Sprint GTA - Standard                         | 7.9   |
+| `Alfa_Romeo_Junior`                       | Alfa Romeo Junior - Elettrica 280 CV Veloce                     | 10.9  |
+| `Alpine_A110_S`                           | Alpine A110 S - Aero Package                                    | 12.3  |
+| `Alpine_A290_Beta`                        | Alpine A290 Beta - Standard                                     | 10.2  |
+| `Audi_R8_LMS_GT4_Evo`                     | Audi R8 LMS GT4 Evo - GT4                                       | 15.6  |
+| `Audi_RS_3_Sportback`                     | Audi RS 3 Sportback - Sportback                                 | 12.2  |
+| `Audi_RS_6_Avant`                         | Audi RS 6 Avant - Standard                                      | 12.2  |
+| `Audi_Sport_quattro`                      | Audi Sport quattro - Standard                                   | 10.7  |
+| `BMW_M2_Coupe`                            | BMW M2 Coupe - Performance                                      | 11.6  |
+| `BMW_M2_Coupe`                            | BMW M2 Coupe - Standard                                         | 11.5  |
+| `BMW_M2_CS_Racing`                        | BMW M2 CS Racing - 350                                          | 13.1  |
+| `BMW_M2_CS_Racing`                        | BMW M2 CS Racing - 450                                          | 13.5  |
+| `BMW_M3_E30_Sport_Evo_Evolution_III`      | BMW M3 E30 Sport Evo (Evolution III) - Standard                 | 9.4   |
+| `BMW_M3_E46_CSL`                          | BMW M3 E46 CSL - Standard                                       | 10.3  |
+| `BMW_M4_CSL`                              | BMW M4 CSL - Standard                                           | 11.9  |
+| `BMW_M4_GT3_Evo`                          | BMW M4 GT3 Evo - GT3                                            | 21.2  |
+| `BMW_M8_Competition`                      | BMW M8 Competition - Standard                                   | 11.6  |
+| `Caterham_485_CSR`                        | Caterham 485 CSR - Final Edition                                | 10.7  |
+| `Caterham_485_CSR`                        | Caterham 485 CSR - Road                                         | 10.7  |
+| `Caterham_485_CSR`                        | Caterham 485 CSR - Track                                        | 10.7  |
+| `Caterham_Academy`                        | Caterham Academy - Academy                                      | 8.8   |
+| `Chevrolet_Camaro_ZL1`                    | Chevrolet Camaro ZL1 - 1LE                                      | 12.5  |
+| `Chevrolet_Camaro_ZL1`                    | Chevrolet Camaro ZL1 - Standard                                 | 12.3  |
+| `Dallara_EXP`                             | Dallara EXP - Standard                                          | 22.6  |
+| `Dallara_Stradale`                        | Dallara Stradale - Coupe                                        | 19.0  |
+| `Dallara_Stradale`                        | Dallara Stradale - Spider                                       | 19.0  |
+| `Dallara_Stradale`                        | Dallara Stradale - Track                                        | 19.8  |
+| `Ferrari_288_GTO`                         | Ferrari 288 GTO - Standard                                      | 11.1  |
+| `Ferrari_296_GT3`                         | Ferrari 296 GT3 - GT3                                           | 22.3  |
+| `Ferrari_296_GTB`                         | Ferrari 296 GTB - Assetto Fiorano                               | 14.7  |
+| `Ferrari_296_GTB`                         | Ferrari 296 GTB - Standard                                      | 14.7  |
+| `Ferrari_488_Challenge_Evo`               | Ferrari 488 Challenge Evo - Ferrari Challenge                   | 20.3  |
+| `Ferrari_Daytona_SP3`                     | Ferrari Daytona SP3 - Standard                                  | 15.9  |
+| `Ferrari_F2004`                           | Ferrari F2004 - Standard                                        | 40.8  |
+| `Ferrari_F40_LM`                          | Ferrari F40 LM - Standard                                       | 16.9  |
+| `Ferrari_SF_25`                           | Ferrari SF-25 - F1 2025                                         | 43.4  |
+| `Ford_Escort_RS_Cosworth`                 | Ford Escort RS Cosworth - Standard                              | 8.8   |
+| `Ford_Mustang_GT3`                        | Ford Mustang GT3 - GT3                                          | 19.4  |
+| `Honda_NSX_R_92R`                         | Honda NSX-R 92R - Standard                                      | 10.8  |
+| `Honda_S2000_AP1`                         | Honda S2000 AP1 - Standard                                      | 10.4  |
+| `Hyundai_i30_N_Hatchback`                 | Hyundai i30 N Hatchback - Performance                           | 9.9   |
+| `Hyundai_i30_N_Hatchback`                 | Hyundai i30 N Hatchback - Performance N Limited                 | 10.1  |
+| `Lamborghini_Countach_LP5000_QV`          | Lamborghini Countach LP5000 QV - LP5000 QV                      | 9.5   |
+| `Lamborghini_Huracan_ST_EVO2`             | Lamborghini Huracan ST EVO2 - Super Trofeo                      | 18.4  |
+| `Lamborghini_Huracan_STO`                 | Lamborghini Huracan STO - Road                                  | 15.1  |
+| `Lamborghini_Huracan_STO`                 | Lamborghini Huracan STO - Trackday                              | 15.1  |
+| `Lancia_Delta_HF_integrale_Evoluzione_II` | Lancia Delta HF integrale Evoluzione II - Evo 3 "Violet"        | 8.9   |
+| `Lancia_Delta_HF_integrale_Evoluzione_II` | Lancia Delta HF integrale Evoluzione II - Standard              | 8.8   |
+| `Lotus_Emira`                             | Lotus Emira - Sports                                            | 13.2  |
+| `Lotus_Emira`                             | Lotus Emira - Touring                                           | 13.1  |
+| `Lotus_Exige_V6_Cup`                      | Lotus Exige V6 Cup - Lotus Motorsport                           | 14.4  |
+| `Lotus_Exige_V6_Cup`                      | Lotus Exige V6 Cup - Standard                                   | 13.2  |
+| `Maserati_GT2`                            | Maserati GT2 - GT2                                              | 17.8  |
+| `Mazda_MX_5_NA`                           | Mazda MX-5 NA - RS Limited                                      | 9.3   |
+| `Mazda_MX_5_NA`                           | Mazda MX-5 NA - Standard                                        | 9.1   |
+| `Mazda_MX_5_ND_Cup`                       | Mazda MX-5 ND Cup - Global Cup ND1                              | 10.9  |
+| `Mazda_MX_5_ND_Cup`                       | Mazda MX-5 ND Cup - Global Cup ND2                              | 11.1  |
+| `Mercedes_AMG_GT2`                        | Mercedes-AMG GT2 - GT2                                          | 18.0  |
+| `Mercedes_Benz_190E_25_16_Evo_II`         | Mercedes-Benz 190E 2.5-16 Evo II - Standard                     | 9.6   |
+| `Mini_John_Cooper_S`                      | Mini John Cooper S - Standard                                   | 9.5   |
+| `Mini_John_Cooper_S`                      | Mini John Cooper S - Tune                                       | 10.8  |
+| `Peugeot_205_T16`                         | Peugeot 205 T16 - Standard                                      | 9.8   |
+| `Porsche_718_Cayman_GT4_Clubsport`        | Porsche 718 Cayman GT4 Clubsport - GT4                          | 16.4  |
+| `Porsche_718_Cayman_GT4_RS`               | Porsche 718 Cayman GT4 RS - Standard                            | 12.7  |
+| `Porsche_718_Cayman_GT4_RS`               | Porsche 718 Cayman GT4 RS - Weissach                            | 12.7  |
+| `Porsche_911_GT3_Cup_992`                 | Porsche 911 GT3 Cup (992) - ABS                                 | 17.3  |
+| `Porsche_911_GT3_Cup_992`                 | Porsche 911 GT3 Cup (992) - ABS TC                              | 17.3  |
+| `Porsche_911_GT3_Cup_992`                 | Porsche 911 GT3 Cup (992) - No ABS No TC                        | 17.3  |
+| `Porsche_911_GT3_R_Rennsport_992`         | Porsche 911 GT3 R Rennsport (992) - GT3                         | 19.9  |
+| `Porsche_911_GT3_R_Rennsport_992`         | Porsche 911 GT3 R Rennsport (992) - Unrestricted                | 20.4  |
+| `Porsche_911_GT3_RS_992`                  | Porsche 911 GT3 RS (992) - Clubsport                            | 16.6  |
+| `Porsche_911_GT3_RS_992`                  | Porsche 911 GT3 RS (992) - Weissach                             | 16.6  |
+| `Porsche_911_Turbo_36_964`                | Porsche 911 Turbo 3.6 (964) - Standard                          | 12.3  |
+| `Porsche_911_Turbo_36_964`                | Porsche 911 Turbo 3.6 (964) - X88                               | 12.4  |
+| `Renault_5_GT_Turbo`                      | Renault 5 GT Turbo - Standard                                   | 8.5   |
+| `Toyota_GR86`                             | Toyota GR86 - Hakone Edition                                    | 10.9  |
+| `Toyota_GR86`                             | Toyota GR86 - Standard                                          | 10.9  |
+| `Toyota_GR86`                             | Toyota GR86 - Trueno Edition                                    | 10.9  |
+| `Toyota_Sprinter_Trueno_1600GT_Apex_AE86` | Toyota Sprinter Trueno 1600GT-Apex (AE86) - Anime Tribute       | 9.6   |
+| `Toyota_Sprinter_Trueno_1600GT_Apex_AE86` | Toyota Sprinter Trueno 1600GT-Apex (AE86) - Kouki               | 8.3   |
+| `Toyota_Sprinter_Trueno_1600GT_Apex_AE86` | Toyota Sprinter Trueno 1600GT-Apex (AE86) - Kouki Black Limited | 8.3   |
+| `Toyota_Sprinter_Trueno_1600GT_Apex_AE86` | Toyota Sprinter Trueno 1600GT-Apex (AE86) - Zenki               | 8.3   |
+| `Toyota_Supra_MKIV`                       | Toyota Supra MKIV - Drift                                       | 13.0  |
+| `Toyota_Supra_MKIV`                       | Toyota Supra MKIV - Standard                                    | 10.9  |
+| `Volkswagen_Golf_8_GTI`                   | Volkswagen Golf 8 GTI - Clubsport                               | 11.1  |
+| `Volkswagen_Golf_GTI_Mk1`                 | Volkswagen Golf GTI Mk1 - Standard                              | 7.4   |
 
 ## Tracks
 

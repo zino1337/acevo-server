@@ -51,10 +51,13 @@ docker compose up -d
 
 The Steam volume keeps SteamCMD login state so Steam Guard is not required on every restart of the server.
 
-| Host Path         | Container Path             | Purpose                        |
-| ----------------- | -------------------------- | ------------------------------ |
-| `./volumes/data`  | `/data`                    | Server data                    |
-| `./volumes/steam` | `/root/.local/share/Steam` | SteamCMD cache and login state |
+| Host Path                | Container Path               | Purpose                                   |
+| ------------------------ | ---------------------------- | ----------------------------------------- |
+| `./volumes/data`         | `/data`                      | Server data                               |
+| `./volumes/steam`        | `/root/.local/share/Steam`   | SteamCMD cache and login state            |
+| `./server_launcher.json` | `/data/server_launcher.json` | Optional official Windows launcher config |
+
+Environment variables override values from `server_launcher.json`.
 
 ## Ports
 
@@ -80,32 +83,35 @@ docker compose -f docker-compose-race.yml up -d
 
 This section is shortened on Docker Hub. See the full table in the GitHub README: https://github.com/zino1337/acevo-server#environment-variables
 
-| Name                             | Default                        | Description                                      |
-| -------------------------------- | ------------------------------ | ------------------------------------------------ |
-| `STEAM_USERNAME`                 | empty                          | Steam account name, not email.                   |
-| `STEAM_PASSWORD`                 | empty                          | Steam account password for SteamCMD.             |
-| `STEAM_AUTH_CODE`                | empty                          | Steam Guard auth code for the next login.        |
-| `SERVER_NAME`                    | `AC EVO Nordschleife Trackday` | Public server name.                              |
-| `SERVER_TCP_PORT`                | `9700`                         | TCP listener port. Must match `SERVER_UDP_PORT`. |
-| `SERVER_UDP_PORT`                | `9700`                         | UDP listener port. Must match `SERVER_TCP_PORT`. |
-| `SERVER_HTTP_PORT`               | `8080`                         | HTTP/listing port.                               |
-| `SERVER_MAX_PLAYERS`             | `20`                           | Maximum player slots; downscaled to track max.   |
-| `SERVER_RESULTS_POST_URL`        | empty                          | Experimental native result POST endpoint.        |
-| `SERVER_RESULTS_TOKEN`           | empty                          | Optional token for native result POST endpoint.  |
-| `EVENT_TYPE`                     | `Practice`                     | `Practice` or `Race_Weekend`.                    |
-| `EVENT_TRACK`                    | `Nurburgring_Touristenfahrten` | Track token.                                     |
-| `EVENT_CARS`                     | `all`                          | Comma-separated car names/substrings, or `all`.  |
-| `EVENT_CAR_CATEGORY`             | `all`                          | Car filters such as `Road`, `Track`, or `EV`.    |
-| `EVENT_BAN_CARS`                 | empty                          | Comma-separated car names/substrings to remove.  |
-| `EVENT_BAN_CAR_CATEGORY`         | empty                          | Comma-separated category filters to remove.      |
-| `PRACTICE_DURATION_MINUTES`      | `180`                          | Practice duration in minutes.                    |
-| `QUALIFY_DURATION_MINUTES`       | `10`                           | Qualify duration in minutes for race weekends.   |
-| `WARMUP_DURATION_MINUTES`        | `5`                            | Warmup duration in minutes for race weekends.    |
-| `RACE_DURATION_MINUTES`          | `25`                           | Race duration in minutes when type is `Time`.    |
-| `RACE_DURATION_LAPS`             | `10`                           | Race duration in laps when type is `Laps`.       |
-| `RACE_DURATION_TYPE`             | `Time`                         | Race duration mode: `Time` or `Laps`.            |
-| `AUTO_UPDATE`                    | `true`                         | Updates the dedicated server before startup.     |
-| `ACEVO_FORCE_SOFTWARE_RENDERING` | `true`                         | Enables default no-GPU host compatibility.       |
+| Name                                   | Default                        | Description                                      |
+| -------------------------------------- | ------------------------------ | ------------------------------------------------ |
+| `STEAM_USERNAME`                       | empty                          | Steam account name, not email.                   |
+| `STEAM_PASSWORD`                       | empty                          | Steam account password for SteamCMD.             |
+| `STEAM_AUTH_CODE`                      | empty                          | Steam Guard auth code for the next login.        |
+| `SERVER_LAUNCHER_JSON`                 | `/data/server_launcher.json`   | Optional official tool config loaded as base.    |
+| `SERVER_NAME`                          | `AC EVO Nordschleife Trackday` | Public server name.                              |
+| `SERVER_TCP_PORT`                      | `9700`                         | TCP listener port. Must match `SERVER_UDP_PORT`. |
+| `SERVER_UDP_PORT`                      | `9700`                         | UDP listener port. Must match `SERVER_TCP_PORT`. |
+| `SERVER_HTTP_PORT`                     | `8080`                         | HTTP/listing port.                               |
+| `SERVER_MAX_PLAYERS`                   | `20`                           | Maximum player slots; downscaled to track max.   |
+| `SERVER_RESULTS_POST_URL`              | empty                          | Experimental native result POST endpoint.        |
+| `SERVER_RESULTS_TOKEN`                 | empty                          | Optional token for native result POST endpoint.  |
+| `EVENT_TYPE`                           | `Practice`                     | `Practice` or `Race_Weekend`.                    |
+| `EVENT_TRACK`                          | `Nurburgring_Touristenfahrten` | Track token.                                     |
+| `EVENT_CARS`                           | `all`                          | Comma-separated car names/substrings, or `all`.  |
+| `EVENT_CAR_CATEGORY`                   | `all`                          | Car filters such as `Road`, `Track`, or `EV`.    |
+| `EVENT_BAN_CARS`                       | empty                          | Comma-separated car names/substrings to remove.  |
+| `EVENT_BAN_CAR_CATEGORY`               | empty                          | Comma-separated category filters to remove.      |
+| `PRACTICE_DURATION_MINUTES`            | `180`                          | Practice duration in minutes.                    |
+| `QUALIFY_DURATION_MINUTES`             | `10`                           | Qualify duration in minutes for race weekends.   |
+| `WARMUP_DURATION_MINUTES`              | `5`                            | Warmup duration in minutes for race weekends.    |
+| `RACE_DURATION_MINUTES`                | `25`                           | Race duration in minutes when type is `Time`.    |
+| `RACE_DURATION_LAPS`                   | `10`                           | Race duration in laps when type is `Laps`.       |
+| `RACE_DURATION_TYPE`                   | `Time`                         | Race duration mode: `Time` or `Laps`.            |
+| `RACE_MIN_WAITING_FOR_PLAYERS_SECONDS` | `60`                           | Minimum waiting-for-players time before race.    |
+| `RACE_MAX_WAITING_FOR_PLAYERS_SECONDS` | `60`                           | Maximum waiting-for-players time before race.    |
+| `AUTO_UPDATE`                          | `true`                         | Updates the dedicated server before startup.     |
+| `ACEVO_FORCE_SOFTWARE_RENDERING`       | `true`                         | Enables default no-GPU host compatibility.       |
 
 ## Car Categories
 

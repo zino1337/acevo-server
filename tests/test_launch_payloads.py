@@ -22,6 +22,103 @@ def selected_car_names(server_doc):
     return {car["car_name"] for car in server_doc["allowed_cars_list_full"]}
 
 
+def write_launcher_json(base: Path, value) -> Path:
+    path = base / "server_launcher.json"
+    if isinstance(value, str):
+        path.write_text(value, encoding="utf-8")
+    else:
+        path.write_text(json.dumps(value), encoding="utf-8")
+    return path
+
+
+def launcher_document():
+    return {
+        "Server": {
+            "SelectedServerTypeValue": "MultiplayerServerListSessionType_BOTH",
+            "ServerName": "Windows Tool Server",
+            "MaxPlayers": 8,
+            "TcpPort": 9701,
+            "UdpPort": 9701,
+            "HttpPort": 8081,
+            "IsCycleEnabled": False,
+            "DriverPassword": "driver-password",
+            "SpectatorPassword": "spectator-password",
+            "AdminPassword": "admin-password",
+            "ResultsPostUrl": "https://results.example.test/launcher",
+        },
+        "Event": {
+            "SelectedSessionTypeValue": "GameModeType_RACE_WEEKEND",
+            "SelectedWeatherTypeValue": "GameModeSelectionWeatherType_SCATTERED_CLOUDS",
+            "SelectedWeatherBehaviorValue": "GameModeSelectionWeatherBehaviour_DYNAMIC",
+            "SelectedInitialGripValue": "InitialGrip_OPTIMUM",
+            "SelectedTrackValue": "Watkins Glen International|GP Inner Loop|GP Inner Loop Race|5552",
+            "Cars": [
+                {
+                    "IsSelected": True,
+                    "name": "preset_695b_mech_1",
+                    "display_name": "Abarth 695 Biposto - Standard",
+                    "Ballast": 12.5,
+                    "Restrictor": 3.0,
+                },
+                {
+                    "IsSelected": True,
+                    "name": "ks_caterham_acmd_mech_1",
+                    "display_name": "Caterham Academy - Academy",
+                    "Ballast": 0,
+                    "Restrictor": 0,
+                },
+            ],
+            "ShowOnlySelected": False,
+        },
+        "Sessions": {
+            "PracticeSession": {
+                "forceTimeDuration": True,
+                "TimeMultiplier": 2,
+                "Length": 600,
+                "Hour": 10,
+                "Minute": 15,
+                "MaxWaitToBox": 11,
+                "OvertimeWaitingNextSession": 12,
+                "MinWaitingForPlayers": 2,
+                "MaxWaitingForPlayers": 12,
+            },
+            "QualifyingSession": {
+                "forceTimeDuration": True,
+                "TimeMultiplier": 1,
+                "Length": 300,
+                "Hour": 11,
+                "Minute": 0,
+                "MaxWaitToBox": 13,
+                "OvertimeWaitingNextSession": 14,
+                "MinWaitingForPlayers": 2,
+                "MaxWaitingForPlayers": 12,
+            },
+            "WarmupSession": {
+                "forceTimeDuration": True,
+                "TimeMultiplier": 1,
+                "Length": 120,
+                "Hour": 11,
+                "Minute": 30,
+                "MaxWaitToBox": 15,
+                "OvertimeWaitingNextSession": 16,
+                "MinWaitingForPlayers": 2,
+                "MaxWaitingForPlayers": 12,
+            },
+            "RaceSession": {
+                "forceTimeDuration": False,
+                "TimeMultiplier": 1,
+                "Length": 8,
+                "Hour": 12,
+                "Minute": 0,
+                "MaxWaitToBox": 17,
+                "OvertimeWaitingNextSession": 18,
+                "MinWaitingForPlayers": 2,
+                "MaxWaitingForPlayers": 12,
+            },
+        },
+    }
+
+
 class LaunchPayloadTests(unittest.TestCase):
     def test_event_label_mapping(self):
         cases = [
@@ -151,10 +248,45 @@ class LaunchPayloadTests(unittest.TestCase):
         game_config = season_doc["game_config"]
         self.assertEqual(game_config["practice_duration"], 10800)
         self.assertEqual(game_config["race_duration"], 1500)
+        self.assertEqual(game_config["race_max_wait_to_box"], 60)
+        self.assertEqual(game_config["min_waiting_for_players"], 60)
+        self.assertEqual(game_config["max_waiting_for_players"], 60)
         self.assertEqual(resolved(report, "PRACTICE_DURATION_MINUTES")["value"], 180)
         self.assertIn("converted to 10800 seconds", resolved(report, "PRACTICE_DURATION_MINUTES")["note"])
         self.assertEqual(resolved(report, "RACE_DURATION_MINUTES")["value"], 25)
         self.assertIn("converted to 1500 seconds", resolved(report, "RACE_DURATION_MINUTES")["note"])
+        self.assertEqual(resolved(report, "RACE_MIN_WAITING_FOR_PLAYERS_SECONDS")["value"], 60)
+        self.assertEqual(resolved(report, "RACE_MAX_WAITING_FOR_PLAYERS_SECONDS")["value"], 60)
+
+    def test_race_waiting_for_players_seconds_override(self):
+        _, season_doc, warnings, report = launch_payloads.build_documents_with_report(
+            {
+                "EVENT_TYPE": "Race_Weekend",
+                "RACE_MIN_WAITING_FOR_PLAYERS_SECONDS": "30",
+                "RACE_MAX_WAITING_FOR_PLAYERS_SECONDS": "90",
+            }
+        )
+        self.assertEqual(warnings, [])
+        game_config = season_doc["game_config"]
+        self.assertEqual(game_config["min_waiting_for_players"], 30)
+        self.assertEqual(game_config["max_waiting_for_players"], 90)
+        self.assertEqual(resolved(report, "RACE_MIN_WAITING_FOR_PLAYERS_SECONDS")["source"], "env")
+        self.assertEqual(resolved(report, "RACE_MAX_WAITING_FOR_PLAYERS_SECONDS")["source"], "env")
+
+    def test_race_waiting_for_players_max_clamps_to_min(self):
+        _, season_doc, warnings, report = launch_payloads.build_documents_with_report(
+            {
+                "EVENT_TYPE": "Race_Weekend",
+                "RACE_MIN_WAITING_FOR_PLAYERS_SECONDS": "120",
+                "RACE_MAX_WAITING_FOR_PLAYERS_SECONDS": "30",
+            }
+        )
+        self.assertTrue(any("RACE_MAX_WAITING_FOR_PLAYERS_SECONDS" in warning for warning in warnings))
+        game_config = season_doc["game_config"]
+        self.assertEqual(game_config["min_waiting_for_players"], 120)
+        self.assertEqual(game_config["max_waiting_for_players"], 120)
+        self.assertEqual(resolved(report, "RACE_MAX_WAITING_FOR_PLAYERS_SECONDS")["value"], 120)
+        self.assertEqual(resolved(report, "RACE_MAX_WAITING_FOR_PLAYERS_SECONDS")["source"], "fallback")
 
     def test_race_duration_laps(self):
         _, season_doc_default, warnings_default, report_default = launch_payloads.build_documents_with_report(
@@ -192,6 +324,126 @@ class LaunchPayloadTests(unittest.TestCase):
         self.assertEqual(game_config["practice_overtime_waiting_next_session"], 10)
         self.assertEqual(resolved(report, "PRACTICE_MAX_WAIT_TO_BOX_SECONDS")["value"], 10)
         self.assertEqual(resolved(report, "PRACTICE_OVERTIME_WAITING_NEXT_SESSION_SECONDS")["value"], 10)
+
+    def test_server_launcher_json_imports_known_values(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = write_launcher_json(Path(tmp), launcher_document())
+            server_doc, season_doc, warnings, report = launch_payloads.build_documents_with_report(
+                {"SERVER_LAUNCHER_JSON": str(path)}
+            )
+
+        self.assertEqual(warnings, [])
+        self.assertEqual(server_doc["server_name"], "Windows Tool Server")
+        self.assertEqual(server_doc["server_tcp_listener_port"], 9701)
+        self.assertEqual(server_doc["server_http_port"], 8081)
+        self.assertFalse(server_doc["cycle"])
+        self.assertEqual(server_doc["driver_password"], "driver-password")
+        self.assertEqual(server_doc["admin_password"], "admin-password")
+        self.assertEqual(server_doc["results_post_url"], "https://results.example.test/launcher")
+        self.assertEqual(server_doc["type"], "MultiplayerServerListSessionType_BOTH")
+
+        cars = {car["car_name"]: car for car in server_doc["allowed_cars_list_full"]}
+        self.assertEqual(set(cars), {"preset_695b_mech_1", "ks_caterham_acmd_mech_1"})
+        self.assertEqual(cars["preset_695b_mech_1"]["ballast"], 12)
+        self.assertEqual(cars["preset_695b_mech_1"]["restrictor"], 3.0)
+
+        game_config = season_doc["game_config"]
+        self.assertEqual(season_doc["game_type"], "GameModeType_RACE_WEEKEND")
+        self.assertEqual(season_doc["weather_type"], "GameModeSelectionWeatherType_SCATTERED_CLOUDS")
+        self.assertEqual(season_doc["weather_behaviour"], "GameModeSelectionWeatherBehaviour_DYNAMIC")
+        self.assertEqual(season_doc["event"]["track"], "Watkins Glen International")
+        self.assertEqual(season_doc["event"]["layout"], "GP Inner Loop")
+        self.assertEqual(game_config["practice_duration"], 600)
+        self.assertEqual(game_config["qualify_duration"], 300)
+        self.assertEqual(game_config["warmup_duration"], 120)
+        self.assertEqual(game_config["race_duration_type"], "GameModeSelectionDuration_LAPS")
+        self.assertEqual(game_config["race_duration"], 8)
+        self.assertEqual(game_config["race_max_wait_to_box"], 17)
+        self.assertEqual(game_config["race_overtime_waiting_next_session"], 18)
+        self.assertEqual(game_config["min_waiting_for_players"], 2)
+        self.assertEqual(game_config["max_waiting_for_players"], 12)
+
+        self.assertEqual(resolved(report, "SERVER_NAME")["source"], "json")
+        self.assertEqual(resolved(report, "EVENT_CARS")["source"], "json")
+        self.assertEqual(resolved(report, "RACE_MIN_WAITING_FOR_PLAYERS_SECONDS")["source"], "json")
+        self.assertEqual(resolved(report, "RACE_MAX_WAITING_FOR_PLAYERS_SECONDS")["source"], "json")
+        self.assertEqual(resolved(report, "SERVER_LAUNCHER_JSON")["source"], "env")
+
+    def test_env_overrides_server_launcher_json(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = write_launcher_json(Path(tmp), launcher_document())
+            server_doc, season_doc, warnings, report = launch_payloads.build_documents_with_report(
+                {
+                    "SERVER_LAUNCHER_JSON": str(path),
+                    "SERVER_NAME": "ENV Server",
+                    "EVENT_TYPE": "Practice",
+                    "EVENT_TRACK": "Brands_Hatch_GP",
+                    "EVENT_CARS": "Ferrari_F2004",
+                }
+            )
+
+        self.assertEqual(warnings, [])
+        self.assertEqual(server_doc["server_name"], "ENV Server")
+        self.assertEqual(season_doc["game_type"], "GameModeType_PRACTICE")
+        self.assertEqual(selected_car_names(server_doc), {"preset_f2004_mech_1"})
+        self.assertEqual(server_doc["allowed_cars_list_full"][0]["ballast"], 0.0)
+        self.assertEqual(resolved(report, "SERVER_NAME")["source"], "env")
+        self.assertEqual(resolved(report, "EVENT_CARS")["source"], "env")
+
+    def test_invalid_server_launcher_json_warns_and_uses_defaults(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = write_launcher_json(Path(tmp), "{")
+            server_doc, season_doc, warnings, report = launch_payloads.build_documents_with_report(
+                {"SERVER_LAUNCHER_JSON": str(path)}
+            )
+
+        self.assertTrue(any("invalid JSON" in warning for warning in warnings))
+        self.assertEqual(server_doc["server_name"], "AC EVO Nordschleife Trackday")
+        self.assertEqual(season_doc["game_type"], "GameModeType_PRACTICE")
+        self.assertEqual(resolved(report, "SERVER_LAUNCHER_JSON")["source"], "env")
+
+    def test_server_launcher_json_unknown_track_falls_back(self):
+        document = launcher_document()
+        document["Event"]["SelectedTrackValue"] = "Unknown Track|Unknown Layout|Unknown Race|1234"
+        with tempfile.TemporaryDirectory() as tmp:
+            path = write_launcher_json(Path(tmp), document)
+            _, season_doc, warnings, report = launch_payloads.build_documents_with_report(
+                {"SERVER_LAUNCHER_JSON": str(path)}
+            )
+
+        self.assertTrue(any("EVENT_TRACK" in warning and "unknown track" in warning for warning in warnings))
+        self.assertEqual(season_doc["event"]["track"], "Nurburgring")
+        self.assertEqual(season_doc["event"]["layout"], "Nordschleife")
+        self.assertEqual(resolved(report, "EVENT_TRACK")["source"], "fallback")
+
+    def test_server_launcher_json_unknown_selected_cars_falls_back_to_all(self):
+        document = launcher_document()
+        document["Event"]["Cars"] = [{"IsSelected": True, "name": "preset_does_not_exist"}]
+        with tempfile.TemporaryDirectory() as tmp:
+            path = write_launcher_json(Path(tmp), document)
+            server_doc, _, warnings, _ = launch_payloads.build_documents_with_report(
+                {"SERVER_LAUNCHER_JSON": str(path)}
+            )
+
+        self.assertTrue(any("selected car 'preset_does_not_exist' is unknown" in warning for warning in warnings))
+        self.assertTrue(any("no valid selected cars found" in warning for warning in warnings))
+        self.assertEqual(selected_car_names(server_doc), all_car_names())
+
+    def test_server_launcher_json_uses_race_waiting_for_players_values(self):
+        document = launcher_document()
+        document["Sessions"]["PracticeSession"]["MinWaitingForPlayers"] = 1
+        document["Sessions"]["PracticeSession"]["MaxWaitingForPlayers"] = 3
+        document["Sessions"]["RaceSession"]["MinWaitingForPlayers"] = 5
+        document["Sessions"]["RaceSession"]["MaxWaitingForPlayers"] = 9
+        with tempfile.TemporaryDirectory() as tmp:
+            path = write_launcher_json(Path(tmp), document)
+            _, season_doc, warnings, _ = launch_payloads.build_documents_with_report(
+                {"SERVER_LAUNCHER_JSON": str(path)}
+            )
+
+        self.assertFalse(any("per-session waiting player values differ" in warning for warning in warnings))
+        self.assertEqual(season_doc["game_config"]["min_waiting_for_players"], 5)
+        self.assertEqual(season_doc["game_config"]["max_waiting_for_players"], 9)
 
     def test_dynamic_weather_session_times_include_default_date(self):
         _, season_doc, warnings = launch_payloads.build_documents(
@@ -372,12 +624,16 @@ class LaunchPayloadTests(unittest.TestCase):
                 "RACE_DURATION": "1500",
                 "PRACTICE_MAX_WAIT_TO_BOX": "10",
                 "PRACTICE_OVERTIME_WAITING_NEXT_SESSION": "10",
+                "SERVER_MIN_WAITING_PLAYERS": "30",
+                "SERVER_MAX_WAITING_PLAYERS": "60",
             }
         )
         self.assertTrue(any("PRACTICE_DURATION" in warning for warning in warnings))
         self.assertTrue(any("RACE_DURATION" in warning for warning in warnings))
         self.assertTrue(any("PRACTICE_MAX_WAIT_TO_BOX" in warning for warning in warnings))
         self.assertTrue(any("PRACTICE_OVERTIME_WAITING_NEXT_SESSION" in warning for warning in warnings))
+        self.assertTrue(any("SERVER_MIN_WAITING_PLAYERS" in warning for warning in warnings))
+        self.assertTrue(any("SERVER_MAX_WAITING_PLAYERS" in warning for warning in warnings))
 
     def test_payload_encoding_roundtrip(self):
         server_doc, season_doc, warnings = launch_payloads.build_documents(
@@ -573,6 +829,32 @@ class LaunchPayloadTests(unittest.TestCase):
             self.assertIn(key, rows)
             self.assertEqual(rows[key][3], values["practice"])
             self.assertEqual(rows[key][4], values["race"])
+
+    def test_readme_cars_score_table_matches_mappings(self):
+        rows = []
+        in_cars = False
+        for line in Path("README.md").read_text(encoding="utf-8").splitlines():
+            if line == "## Cars":
+                in_cars = True
+                continue
+            if in_cars and line.startswith("## "):
+                break
+            if in_cars and line.startswith("| `"):
+                cells = [cell.strip() for cell in line.strip().strip("|").split("|")]
+                if cells[0] == "`all`":
+                    continue
+                rows.append((cells[0].strip("`"), cells[1], cells[2]))
+
+        expected = [
+            (
+                launch_payloads.car_env_token(car["display_name"]),
+                car["display_name"],
+                f"{float(car['performance_indicator']):.1f}",
+            )
+            for car in launch_payloads.load_config()["cars_data"]
+        ]
+
+        self.assertEqual(rows, expected)
 
     def test_cli_writes_payload_and_report_files(self):
         with tempfile.TemporaryDirectory() as tmp:

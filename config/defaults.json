@@ -9,9 +9,7 @@
     "cycle_enabled": true,
     "driver_password": "",
     "spectator_password": "",
-    "admin_password": "",
-    "min_waiting_players": 10,
-    "max_waiting_players": 30
+    "admin_password": ""
   },
   "event": {
     "type": "GameModeType_PRACTICE",
@@ -65,8 +63,10 @@
       "hour": 16,
       "minute": 0,
       "time_multiplier": 1,
-      "max_wait_to_box_seconds": 10,
-      "overtime_waiting_next_session_seconds": 10
+      "max_wait_to_box_seconds": 60,
+      "overtime_waiting_next_session_seconds": 10,
+      "min_waiting_for_players_seconds": 60,
+      "max_waiting_for_players_seconds": 60
     }
   }
 }
