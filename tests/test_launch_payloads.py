@@ -249,13 +249,13 @@ class LaunchPayloadTests(unittest.TestCase):
         self.assertEqual(game_config["practice_duration"], 10800)
         self.assertEqual(game_config["race_duration"], 1500)
         self.assertEqual(game_config["race_max_wait_to_box"], 60)
-        self.assertEqual(game_config["min_waiting_for_players"], 60)
+        self.assertEqual(game_config["min_waiting_for_players"], 10)
         self.assertEqual(game_config["max_waiting_for_players"], 60)
         self.assertEqual(resolved(report, "PRACTICE_DURATION_MINUTES")["value"], 180)
         self.assertIn("converted to 10800 seconds", resolved(report, "PRACTICE_DURATION_MINUTES")["note"])
         self.assertEqual(resolved(report, "RACE_DURATION_MINUTES")["value"], 25)
         self.assertIn("converted to 1500 seconds", resolved(report, "RACE_DURATION_MINUTES")["note"])
-        self.assertEqual(resolved(report, "RACE_MIN_WAITING_FOR_PLAYERS_SECONDS")["value"], 60)
+        self.assertEqual(resolved(report, "RACE_MIN_WAITING_FOR_PLAYERS_SECONDS")["value"], 10)
         self.assertEqual(resolved(report, "RACE_MAX_WAITING_FOR_PLAYERS_SECONDS")["value"], 60)
 
     def test_race_waiting_for_players_seconds_override(self):

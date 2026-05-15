@@ -108,7 +108,7 @@ This section is shortened on Docker Hub. See the full table in the GitHub README
 | `RACE_DURATION_MINUTES`                | `25`                           | Race duration in minutes when type is `Time`.    |
 | `RACE_DURATION_LAPS`                   | `10`                           | Race duration in laps when type is `Laps`.       |
 | `RACE_DURATION_TYPE`                   | `Time`                         | Race duration mode: `Time` or `Laps`.            |
-| `RACE_MIN_WAITING_FOR_PLAYERS_SECONDS` | `60`                           | Minimum waiting-for-players time before race.    |
+| `RACE_MIN_WAITING_FOR_PLAYERS_SECONDS` | `10`                           | Minimum waiting-for-players time before race.    |
 | `RACE_MAX_WAITING_FOR_PLAYERS_SECONDS` | `60`                           | Maximum waiting-for-players time before race.    |
 | `AUTO_UPDATE`                          | `true`                         | Updates the dedicated server before startup.     |
 | `ACEVO_FORCE_SOFTWARE_RENDERING`       | `true`                         | Enables default no-GPU host compatibility.       |

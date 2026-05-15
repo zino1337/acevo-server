@@ -144,7 +144,7 @@ Set or adjust in `.env` or in the docker compose file.
 | `RACE_DURATION_MINUTES`                          | `25`                           | integer | Race duration in minutes when `RACE_DURATION_TYPE=Time`.                                                       |
 | `RACE_DURATION_LAPS`                             | `10`                           | integer | Race duration in laps when `RACE_DURATION_TYPE=Laps`.                                                          |
 | `RACE_DURATION_TYPE`                             | `Time`                         | enum    | Race duration mode: `Time` or `Laps`.                                                                          |
-| `RACE_MIN_WAITING_FOR_PLAYERS_SECONDS`           | `60`                           | integer | Minimum waiting-for-players time before race start, in seconds.                                                |
+| `RACE_MIN_WAITING_FOR_PLAYERS_SECONDS`           | `10`                           | integer | Minimum waiting-for-players time before race start, in seconds.                                                |
 | `RACE_MAX_WAITING_FOR_PLAYERS_SECONDS`           | `60`                           | integer | Maximum waiting-for-players time before race start, in seconds; clamped up to min if smaller.                  |
 | `RACE_HOUR`                                      | `16`                           | integer | Race start hour, used for `Race_Weekend`.                                                                      |
 | `RACE_MAX_WAIT_TO_BOX_SECONDS`                   | `60`                           | integer | Max wait to box in seconds, used for `Race_Weekend`.                                                           |
