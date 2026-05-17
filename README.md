@@ -116,27 +116,27 @@ Set or adjust in `.env` or in the docker compose file.
 | `PRACTICE_DAY`                                   | `15`                           | integer | Practice start day.                                                                                            |
 | `PRACTICE_DURATION_MINUTES`                      | `180`                          | integer | Practice duration in minutes.                                                                                  |
 | `PRACTICE_HOUR`                                  | `14`                           | integer | Practice start hour.                                                                                           |
-| `PRACTICE_MAX_WAIT_TO_BOX_SECONDS`               | `10`                           | integer | Max wait to box in seconds.                                                                                    |
+| `PRACTICE_MAX_WAIT_TO_BOX_SECONDS`               | `10`                           | integer | The max time to complete the flying lap and go back to the pit.                                                |
 | `PRACTICE_MINUTE`                                | `0`                            | integer | Practice start minute.                                                                                         |
-| `PRACTICE_OVERTIME_WAITING_NEXT_SESSION_SECONDS` | `10`                           | integer | Overtime before the next session in seconds.                                                                   |
+| `PRACTICE_OVERTIME_WAITING_NEXT_SESSION_SECONDS` | `10`                           | integer | The waiting time for the next session.                                                                         |
 | `PRACTICE_TIME_MULTIPLIER`                       | `1`                            | integer | In-game time multiplier.                                                                                       |
 | `QUALIFY_YEAR`                                   | `2024`                         | integer | Qualify start year, used for `Race_Weekend`.                                                                   |
 | `QUALIFY_MONTH`                                  | `8`                            | integer | Qualify start month, used for `Race_Weekend`.                                                                  |
 | `QUALIFY_DAY`                                    | `15`                           | integer | Qualify start day, used for `Race_Weekend`.                                                                    |
 | `QUALIFY_DURATION_MINUTES`                       | `10`                           | integer | Qualify duration in minutes, used for `Race_Weekend`.                                                          |
 | `QUALIFY_HOUR`                                   | `16`                           | integer | Qualify start hour, used for `Race_Weekend`.                                                                   |
-| `QUALIFY_MAX_WAIT_TO_BOX_SECONDS`                | `10`                           | integer | Max wait to box in seconds, used for `Race_Weekend`.                                                           |
+| `QUALIFY_MAX_WAIT_TO_BOX_SECONDS`                | `10`                           | integer | The max time to complete the flying lap and go back to the pit, used for `Race_Weekend`.                       |
 | `QUALIFY_MINUTE`                                 | `0`                            | integer | Qualify start minute, used for `Race_Weekend`.                                                                 |
-| `QUALIFY_OVERTIME_WAITING_NEXT_SESSION_SECONDS`  | `10`                           | integer | Overtime before the next session in seconds, used for `Race_Weekend`.                                          |
+| `QUALIFY_OVERTIME_WAITING_NEXT_SESSION_SECONDS`  | `10`                           | integer | The waiting time for the next session, used for `Race_Weekend`.                                                |
 | `QUALIFY_TIME_MULTIPLIER`                        | `1`                            | integer | In-game time multiplier, used for `Race_Weekend`.                                                              |
 | `WARMUP_YEAR`                                    | `2024`                         | integer | Warmup start year, used for `Race_Weekend`.                                                                    |
 | `WARMUP_MONTH`                                   | `8`                            | integer | Warmup start month, used for `Race_Weekend`.                                                                   |
 | `WARMUP_DAY`                                     | `15`                           | integer | Warmup start day, used for `Race_Weekend`.                                                                     |
 | `WARMUP_DURATION_MINUTES`                        | `5`                            | integer | Warmup duration in minutes, used for `Race_Weekend`.                                                           |
 | `WARMUP_HOUR`                                    | `16`                           | integer | Warmup start hour, used for `Race_Weekend`.                                                                    |
-| `WARMUP_MAX_WAIT_TO_BOX_SECONDS`                 | `10`                           | integer | Max wait to box in seconds, used for `Race_Weekend`.                                                           |
+| `WARMUP_MAX_WAIT_TO_BOX_SECONDS`                 | `10`                           | integer | The max time to complete the flying lap and go back to the pit, used for `Race_Weekend`.                       |
 | `WARMUP_MINUTE`                                  | `0`                            | integer | Warmup start minute, used for `Race_Weekend`.                                                                  |
-| `WARMUP_OVERTIME_WAITING_NEXT_SESSION_SECONDS`   | `10`                           | integer | Overtime before the next session in seconds, used for `Race_Weekend`.                                          |
+| `WARMUP_OVERTIME_WAITING_NEXT_SESSION_SECONDS`   | `10`                           | integer | The waiting time for the next session, used for `Race_Weekend`.                                                |
 | `WARMUP_TIME_MULTIPLIER`                         | `1`                            | integer | In-game time multiplier, used for `Race_Weekend`.                                                              |
 | `RACE_YEAR`                                      | `2024`                         | integer | Race start year, used for `Race_Weekend`.                                                                      |
 | `RACE_MONTH`                                     | `8`                            | integer | Race start month, used for `Race_Weekend`.                                                                     |
@@ -144,12 +144,12 @@ Set or adjust in `.env` or in the docker compose file.
 | `RACE_DURATION_MINUTES`                          | `25`                           | integer | Race duration in minutes when `RACE_DURATION_TYPE=Time`.                                                       |
 | `RACE_DURATION_LAPS`                             | `10`                           | integer | Race duration in laps when `RACE_DURATION_TYPE=Laps`.                                                          |
 | `RACE_DURATION_TYPE`                             | `Time`                         | enum    | Race duration mode: `Time` or `Laps`.                                                                          |
-| `RACE_MIN_WAITING_FOR_PLAYERS_SECONDS`           | `10`                           | integer | Minimum waiting-for-players time before race start, in seconds.                                                |
-| `RACE_MAX_WAITING_FOR_PLAYERS_SECONDS`           | `60`                           | integer | Maximum waiting-for-players time before race start, in seconds; clamped up to min if smaller.                  |
+| `RACE_MIN_WAITING_FOR_PLAYERS_SECONDS`           | `10`                           | integer | The minimum wait to start the race.                                                                            |
+| `RACE_MAX_WAITING_FOR_PLAYERS_SECONDS`           | `60`                           | integer | The maximum wait to start the race; clamped up to min if smaller.                                              |
 | `RACE_HOUR`                                      | `16`                           | integer | Race start hour, used for `Race_Weekend`.                                                                      |
-| `RACE_MAX_WAIT_TO_BOX_SECONDS`                   | `60`                           | integer | Max wait to box in seconds, used for `Race_Weekend`.                                                           |
+| `RACE_MAX_WAIT_TO_BOX_SECONDS`                   | `60`                           | integer | The max time to complete the flying lap and go back to the pit, used for `Race_Weekend`.                       |
 | `RACE_MINUTE`                                    | `0`                            | integer | Race start minute, used for `Race_Weekend`.                                                                    |
-| `RACE_OVERTIME_WAITING_NEXT_SESSION_SECONDS`     | `10`                           | integer | Overtime before the next session in seconds, used for `Race_Weekend`.                                          |
+| `RACE_OVERTIME_WAITING_NEXT_SESSION_SECONDS`     | `10`                           | integer | The waiting time for the next session, used for `Race_Weekend`.                                                |
 | `RACE_TIME_MULTIPLIER`                           | `1`                            | integer | In-game time multiplier, used for `Race_Weekend`.                                                              |
 
 ## Car Categories
