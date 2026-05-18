@@ -51,11 +51,11 @@ docker compose up -d
 
 The Steam volume keeps SteamCMD login state so Steam Guard is not required on every restart of the server.
 
-| Host Path                | Container Path               | Purpose                                   |
-| ------------------------ | ---------------------------- | ----------------------------------------- |
-| `./volumes/data`         | `/data`                      | Server data                               |
-| `./volumes/steam`        | `/root/.local/share/Steam`   | SteamCMD cache and login state            |
-| `./server_launcher.json` | `/data/server_launcher.json` | Optional official Windows launcher config |
+| Volume / Path                | Description                                                                  |
+| ---------------------------- | ---------------------------------------------------------------------------- |
+| `/data`                      | Persistent server data, saves, and generated config files                    |
+| `/root/.local/share/Steam`   | SteamCMD cache and login state                                               |
+| `/data/server_launcher.json` | Optional official Windows launcher config loaded via `SERVER_LAUNCHER_JSON` |
 
 Environment variables override values from `server_launcher.json`.
 
