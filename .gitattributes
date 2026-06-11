@@ -1,0 +1,4 @@
+# Shell scripts must use LF so their shebang works inside the Linux container,
+# even when the repo is checked out on Windows (a CRLF in `#!/usr/bin/env bash`
+# makes the kernel look for `bash\r` and the container exits with code 127).
+*.sh text eol=lf

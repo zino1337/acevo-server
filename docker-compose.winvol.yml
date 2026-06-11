@@ -1,0 +1,39 @@
+# Windows / Docker Desktop compose.
+#
+# On Windows, Docker Desktop serves the `./volumes` bind mount from NTFS through its WSL2
+# (virtiofs) layer, and Proton/Wine running the Windows server off that layer fails with
+# ACCESS_DENIED (the server exits 5 before it starts). Putting /data on a Linux-native named
+# volume avoids that. The dashboard (running inside this container) writes server_launcher.json
+# straight into the shared /data volume, so no extra host mount is needed.
+#
+# One-time:   docker volume create acevo_data
+# Run:        docker compose -f docker-compose.winvol.yml up -d   (first run downloads the server)
+# Then open the dashboard at http://localhost:8090
+#
+# Note: a dedicated server must be reachable from the internet on its UDP port; behind a
+# desktop NAT the Kunos backend force-stops it after ~2 min. That is a port-forwarding
+# requirement, not OS-specific.
+
+services:
+  acevo-server:
+    image: zino1337/acevo-server:latest
+    build:
+      context: .
+    container_name: acevo-server
+    restart: "no"
+    init: true
+    stop_grace_period: 90s
+    volumes:
+      - acevo_data:/data # Linux-native: game install + Proton/Wine prefix + server_launcher.json
+      - ./volumes/steam:/root/.local/share/Steam # Steam login cache (persists across restarts)
+    env_file:
+      - .env
+    ports:
+      - "${SERVER_TCP_PORT:-9700}:${SERVER_TCP_PORT:-9700}/tcp"
+      - "${SERVER_UDP_PORT:-9700}:${SERVER_UDP_PORT:-9700}/udp"
+      - "${SERVER_HTTP_PORT:-8099}:${SERVER_HTTP_PORT:-8099}/tcp"
+      - "${DASHBOARD_PORT:-8090}:${DASHBOARD_PORT:-8090}/tcp" # web dashboard
+
+volumes:
+  acevo_data:
+    external: true

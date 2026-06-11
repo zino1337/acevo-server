@@ -1,0 +1,3 @@
+{
+  "Exclude": ["dashboard/static/vendor/", "node_modules/", "volumes/", "\\.git/"]
+}

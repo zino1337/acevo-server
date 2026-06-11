@@ -5,6 +5,8 @@
 .env.*
 !.env.example
 volumes/
+node_modules/
+tests/
 __pycache__/
 *.py[cod]
 .pytest_cache/

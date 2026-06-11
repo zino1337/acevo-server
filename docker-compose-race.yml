@@ -5,6 +5,7 @@ services:
       context: .
     container_name: acevo-server
     restart: no
+    init: true
     stop_grace_period: 90s
     volumes:
       - ./volumes/data:/data
@@ -23,3 +24,4 @@ services:
       - "${SERVER_TCP_PORT:-9700}:${SERVER_TCP_PORT:-9700}/tcp"
       - "${SERVER_UDP_PORT:-9700}:${SERVER_UDP_PORT:-9700}/udp"
       - "${SERVER_HTTP_PORT:-8080}:${SERVER_HTTP_PORT:-8080}/tcp"
+      - "${DASHBOARD_PORT:-8090}:${DASHBOARD_PORT:-8090}/tcp" # web dashboard

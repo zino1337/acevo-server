@@ -7,3 +7,4 @@ __pycache__/
 *.py[cod]
 volumes/data/
 volumes/steam/
+volumes/config/

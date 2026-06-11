@@ -65,6 +65,20 @@ Environment variables override values from `server_launcher.json`.
 | `9700` | TCP      | yes     | Server TCP port   |
 | `9700` | UDP      | yes     | Server UDP port   |
 | `8080` | TCP      | yes     | HTTP/listing port |
+| `8090` | TCP      | yes     | Web dashboard     |
+
+## Web Dashboard
+
+The container ships a built-in web dashboard that mirrors the official Windows "AC EVO Server Launcher". It starts automatically with the container — after `docker compose up`, just open **`http://<host>:8090`** in a browser (change the port with `DASHBOARD_PORT`).
+
+From the dashboard you can:
+
+- Configure everything visually — server name, ports, passwords, cars, track, weather, and session timing — in a light or dark theme, with live validation as you edit.
+- **Start**, **Stop**, and **Restart** the server and watch its log. **Save & Apply** saves your settings and restarts the server so they take effect.
+
+The dashboard stays available even if the server itself stops, so you can fix the configuration and start it again. Protect it by setting `DASHBOARD_USER` / `DASHBOARD_PASSWORD` in `.env` (an empty password makes it public) and expose it only on a trusted network.
+
+> **Windows:** start the stack with `docker compose -f docker-compose.winvol.yml up -d` instead (see the file header for the one-time `docker volume create acevo_data`).
 
 ## Docker Compose Examples
 
@@ -83,7 +97,11 @@ Set or adjust in `.env` or in the docker compose file.
 | Name                                             | Default                        | Type    | Description                                                                                                    |
 | ------------------------------------------------ | ------------------------------ | ------- | -------------------------------------------------------------------------------------------------------------- |
 | `ACEVO_FORCE_SOFTWARE_RENDERING`                 | `true`                         | boolean | Forces Proton/WineD3D and Mesa llvmpipe software rendering for broad no-GPU host compatibility.                |
+| `AUTO_START_SERVER`                              | `true`                         | boolean | Start the AC EVO server automatically when the container starts (the dashboard can stop/restart it).           |
 | `AUTO_UPDATE`                                    | `true`                         | boolean | Updates the dedicated server before startup.                                                                   |
+| `DASHBOARD_PASSWORD`                             | empty                          | string  | Web dashboard Basic Auth password; empty disables auth (public). See the Web Dashboard section.                |
+| `DASHBOARD_PORT`                                 | `8090`                         | integer | Port the web dashboard listens on.                                                                             |
+| `DASHBOARD_USER`                                 | `admin`                        | string  | Web dashboard Basic Auth username.                                                                             |
 | `PGID`                                           | `0`                            | integer | Group ID used for mounted volume ownership.                                                                    |
 | `PUID`                                           | `0`                            | integer | User ID used for mounted volume ownership.                                                                     |
 | `SERVER_LAUNCHER_JSON`                           | `/data/server_launcher.json`   | path    | Optional official tool config loaded as base config when present; ENV values override it.                      |

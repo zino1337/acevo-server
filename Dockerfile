@@ -45,7 +45,11 @@ RUN dpkg --add-architecture i386 \
 
 WORKDIR /data
 
+ENV PYTHONPATH=/opt/acevo
+EXPOSE 8090
+
 COPY config/ /opt/acevo/config/
+COPY dashboard/ /opt/acevo/dashboard/
 COPY --chmod=755 scripts/ /opt/acevo/scripts/
 
 ENTRYPOINT ["/opt/acevo/scripts/start.sh"]
