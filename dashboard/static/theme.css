@@ -129,6 +129,16 @@ body {
   font-size: 0.85rem;
 }
 
+.tabbar {
+  padding: 0 20px;
+  background: var(--md-sys-color-surface);
+  border-bottom: 1px solid var(--md-sys-color-outline-variant);
+}
+
+.tabbar md-tabs {
+  max-width: 360px;
+}
+
 /* Status chip */
 .status-chip {
   display: inline-flex;
@@ -244,6 +254,10 @@ md-outlined-select {
   gap: 4px;
 }
 
+.cars-select-all {
+  font-weight: 500;
+}
+
 .pi-row {
   display: flex;
   align-items: center;
@@ -324,10 +338,47 @@ md-outlined-select {
 }
 
 /* Logs */
-.logs-panel {
-  margin: 0 20px 24px;
+.logs-view {
+  padding: 16px 20px 40px;
 }
+
+.logs-panel {
+  display: flex;
+  flex-direction: column;
+  min-height: calc(100vh - 160px);
+  margin: 0;
+}
+
+.logs-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 14px;
+}
+
+.logs-header h2 {
+  margin-bottom: 0;
+}
+
+.logs-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.logs-actions md-outlined-select {
+  width: 132px;
+}
+
+.logs-actions .log-tail-custom {
+  width: 152px;
+}
+
 .logs-output {
+  flex: 1;
   background: var(--md-sys-color-surface-container-highest);
   color: var(--md-sys-color-on-surface);
   border-radius: 12px;
@@ -335,8 +386,15 @@ md-outlined-select {
   font-family: "Roboto Mono", ui-monospace, monospace;
   font-size: 0.78rem;
   white-space: pre-wrap;
-  max-height: 320px;
+  min-height: 420px;
+  max-height: none;
   overflow-y: auto;
+}
+
+.clipboard-fallback {
+  position: fixed;
+  left: -9999px;
+  top: 0;
 }
 
 .action-bar {

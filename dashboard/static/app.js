@@ -33,7 +33,11 @@ const carFilters = {
 };
 let validateTimer = null;
 let logsTimer = null;
-let logsVisible = false;
+let logTailTimer = null;
+let activeView = "config";
+
+const LOG_TAIL_DEFAULT = 200;
+const LOG_TAIL_MAX = 50000;
 
 // --- small helpers --------------------------------------------------------------------------
 
@@ -349,13 +353,18 @@ function renderCars() {
   actions.className = "switch-row";
   const left = document.createElement("div");
   left.className = "action-bar";
-  const selectAll = document.createElement("md-text-button");
-  selectAll.textContent = "Select all";
-  selectAll.addEventListener("click", () => setAllVisible(true));
+  const allVisibleWrap = document.createElement("label");
+  allVisibleWrap.className = "cat cars-select-all";
+  const allVisibleCb = document.createElement("md-checkbox");
+  allVisibleCb.id = "cars-all-visible";
+  allVisibleCb.addEventListener("change", () => setAllVisible(allVisibleCb.checked));
+  const allVisibleSpan = document.createElement("span");
+  allVisibleSpan.textContent = "All visible";
+  allVisibleWrap.append(allVisibleCb, allVisibleSpan);
   const selectNone = document.createElement("md-text-button");
   selectNone.textContent = "Select none";
   selectNone.addEventListener("click", () => setAllVisible(false));
-  left.append(selectAll, selectNone);
+  left.append(allVisibleWrap, selectNone);
   const onlyWrap = document.createElement("label");
   onlyWrap.className = "cat";
   const onlyCb = document.createElement("md-checkbox");
@@ -395,11 +404,15 @@ function carMatches(car) {
   return true;
 }
 
+function visibleCars() {
+  return META.cars.filter(carMatches);
+}
+
 function renderCarList() {
   const list = byId("cars-list");
   if (!list) return;
   list.innerHTML = "";
-  const shown = META.cars.filter(carMatches);
+  const shown = visibleCars();
   for (const car of shown) {
     const cs = carState.get(car.internal_name);
     const row = document.createElement("div");
@@ -448,19 +461,30 @@ function renderCarList() {
     row.append(cb, nameWrap, ballast, restrictor);
     list.append(row);
   }
-  updateCarMeta(shown.length);
+  updateCarMeta(shown);
 }
 
-function updateCarMeta(shownCount) {
+function updateCarMeta(shownCars) {
   const meta = byId("cars-meta");
   if (!meta) return;
+  const shown = Array.isArray(shownCars) ? shownCars : visibleCars();
   const selected = [...carState.values()].filter((c) => c.is_selected).length;
-  const shown = shownCount == null ? META.cars.filter(carMatches).length : shownCount;
-  meta.textContent = `${selected} of ${META.cars.length} selected · ${shown} shown`;
+  meta.textContent = `${selected} of ${META.cars.length} selected - ${shown.length} shown`;
+  updateAllVisibleControl(shown);
+}
+
+function updateAllVisibleControl(shownCars) {
+  const cb = byId("cars-all-visible");
+  if (!cb) return;
+  const shown = Array.isArray(shownCars) ? shownCars : visibleCars();
+  const selectedShown = shown.filter((car) => carState.get(car.internal_name).is_selected).length;
+  cb.disabled = shown.length === 0;
+  cb.checked = shown.length > 0 && selectedShown === shown.length;
+  cb.indeterminate = selectedShown > 0 && selectedShown < shown.length;
 }
 
 function setAllVisible(value) {
-  for (const car of META.cars.filter(carMatches)) {
+  for (const car of visibleCars()) {
     carState.get(car.internal_name).is_selected = value;
   }
   renderCarList();
@@ -761,8 +785,9 @@ async function doSaveApply() {
 
 async function refreshLogs() {
   try {
-    const r = await api.get("/api/server/logs?tail=200");
-    byId("logs-output").textContent = r.lines || r.error || "(no output)";
+    const r = await api.get(`/api/server/logs?tail=${encodeURIComponent(readLogTail())}`);
+    const lines = r.lines || "";
+    byId("logs-output").textContent = lines || r.error || r.message || "(no output)";
   } catch (err) {
     byId("logs-output").textContent = String(err);
   }
@@ -770,18 +795,97 @@ async function refreshLogs() {
 
 function refreshLogsSoon() {
   setTimeout(() => {
-    if (logsVisible) refreshLogs();
+    if (activeView === "logs") refreshLogs();
   }, 1500);
 }
 
-function toggleLogs() {
-  logsVisible = !logsVisible;
-  byId("logs-panel").classList.toggle("hidden", !logsVisible);
+function startLogPolling() {
   clearInterval(logsTimer);
-  if (logsVisible) {
-    refreshLogs();
-    logsTimer = setInterval(refreshLogs, 4000);
+  refreshLogs();
+  logsTimer = setInterval(refreshLogs, 4000);
+}
+
+function stopLogPolling() {
+  clearInterval(logsTimer);
+  logsTimer = null;
+}
+
+function setActiveView(view) {
+  activeView = view;
+  byId("config-view").classList.toggle("hidden", view !== "config");
+  byId("logs-view").classList.toggle("hidden", view !== "logs");
+  byId("tab-config").active = view === "config";
+  byId("tab-logs").active = view === "logs";
+  byId("main-tabs").activeTabIndex = view === "logs" ? 1 : 0;
+  if (view === "logs") startLogPolling();
+  else stopLogPolling();
+}
+
+function normalizeLogTail(value) {
+  const parsed = Number.parseInt(value, 10);
+  if (!Number.isFinite(parsed) || parsed < 1) return LOG_TAIL_DEFAULT;
+  return Math.min(parsed, LOG_TAIL_MAX);
+}
+
+function readLogTail() {
+  const preset = byId("log-tail-preset").value;
+  if (preset === "custom") return normalizeLogTail(byId("log-tail-custom").value);
+  return normalizeLogTail(preset);
+}
+
+function handleLogTailPreset() {
+  const preset = byId("log-tail-preset").value;
+  const custom = byId("log-tail-custom");
+  if (preset !== "custom") custom.value = preset;
+  custom.classList.toggle("hidden", preset !== "custom");
+  scheduleLogRefresh();
+}
+
+function scheduleLogRefresh() {
+  clearTimeout(logTailTimer);
+  if (activeView !== "logs") return;
+  logTailTimer = setTimeout(refreshLogs, 250);
+}
+
+async function copyLogs() {
+  const text = byId("logs-output").textContent || "";
+  if (!text.trim()) {
+    toast("No logs to copy.");
+    return;
   }
+  try {
+    await navigator.clipboard.writeText(text);
+    toast("Logs copied.");
+  } catch {
+    const area = document.createElement("textarea");
+    area.value = text;
+    area.setAttribute("readonly", "");
+    area.className = "clipboard-fallback";
+    document.body.append(area);
+    area.select();
+    document.execCommand("copy");
+    area.remove();
+    toast("Logs copied.");
+  }
+}
+
+function downloadLogs() {
+  const text = byId("logs-output").textContent || "";
+  if (!text.trim()) {
+    toast("No logs to download.");
+    return;
+  }
+  const blob = new Blob([text.endsWith("\n") ? text : `${text}\n`], { type: "text/plain;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+  link.href = url;
+  link.download = `acevo-server-${stamp}.log`;
+  document.body.append(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+  toast("Logs downloaded.");
 }
 
 // --- theme ----------------------------------------------------------------------------------
@@ -807,7 +911,13 @@ function wireControls() {
   byId("btn-restart").addEventListener("click", doRestart);
   byId("btn-save").addEventListener("click", doSave);
   byId("btn-save-apply").addEventListener("click", doSaveApply);
-  byId("btn-logs").addEventListener("click", toggleLogs);
+  byId("tab-config").addEventListener("click", () => setActiveView("config"));
+  byId("tab-logs").addEventListener("click", () => setActiveView("logs"));
+  byId("log-tail-preset").addEventListener("change", handleLogTailPreset);
+  byId("log-tail-custom").addEventListener("input", scheduleLogRefresh);
+  byId("btn-log-refresh").addEventListener("click", refreshLogs);
+  byId("btn-copy-logs").addEventListener("click", copyLogs);
+  byId("btn-download-logs").addEventListener("click", downloadLogs);
   byId("theme-switch").addEventListener("change", (e) => setTheme(e.target.selected));
 }
 
@@ -829,6 +939,7 @@ async function init() {
   renderCars();
   renderSessions();
   wireControls();
+  setActiveView("config");
 
   runValidate();
   refreshStatus();

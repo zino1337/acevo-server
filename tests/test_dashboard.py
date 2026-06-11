@@ -1,6 +1,8 @@
 import base64
+import io
 import json
 import shutil
+import subprocess
 import tempfile
 import threading
 import unittest
@@ -162,12 +164,13 @@ class FakeProc:
     """Minimal stand-in for subprocess.Popen. ``alive_polls`` poll() calls return None
     (still running) before the process is reported as finished with ``poll_result``."""
 
-    def __init__(self, pid=4242, poll_result=None, alive_polls=0):
+    def __init__(self, pid=4242, poll_result=None, alive_polls=0, stdout=None):
         self.pid = pid
         self.returncode = poll_result
         self._poll = poll_result
         self._alive_polls = alive_polls
         self._calls = 0
+        self.stdout = stdout if stdout is not None else io.BytesIO()
 
     def poll(self):
         self._calls += 1
@@ -188,8 +191,10 @@ class ServerControlTests(unittest.TestCase):
         self.addCleanup(patcher.stop)
         server_control._proc = None
         server_control._last_exit = None
+        server_control._log_thread = None
         self.addCleanup(setattr, server_control, "_proc", None)
         self.addCleanup(setattr, server_control, "_last_exit", None)
+        self.addCleanup(setattr, server_control, "_log_thread", None)
 
     def test_start_spawns_server_process(self):
         script = self.tmp / "run_server.sh"
@@ -205,6 +210,8 @@ class ServerControlTests(unittest.TestCase):
         self.assertEqual(result["pid"], 4242)
         _args, kwargs = popen.call_args
         self.assertIn(str(script), _args[0])
+        self.assertEqual(kwargs["stdout"], subprocess.PIPE)
+        self.assertEqual(kwargs["stderr"], subprocess.STDOUT)
         self.assertTrue(kwargs["start_new_session"])
 
     def test_start_missing_script_errors(self):
@@ -245,6 +252,20 @@ class ServerControlTests(unittest.TestCase):
         out = server_control.logs(tail=2)
         self.assertTrue(out["ok"])
         self.assertEqual(out["lines"], "line2\nline3")
+
+    def test_tee_output_writes_log_file_and_stdout(self):
+        proc = FakeProc(stdout=io.BytesIO(b"line1\nline2\n"))
+        captured = io.BytesIO()
+
+        class Stdout:
+            buffer = captured
+
+        server_control.LOG_FILE.parent.mkdir(parents=True, exist_ok=True)
+        with patch.object(server_control.sys, "stdout", Stdout()):
+            server_control._tee_output(proc, server_control.LOG_FILE)
+
+        self.assertEqual(server_control.LOG_FILE.read_bytes(), b"line1\nline2\n")
+        self.assertEqual(captured.getvalue(), b"line1\nline2\n")
 
 
 class BasicAuthTests(unittest.TestCase):

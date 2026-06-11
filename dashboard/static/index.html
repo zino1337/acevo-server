@@ -30,7 +30,6 @@
         <md-filled-tonal-button id="btn-start">Start</md-filled-tonal-button>
         <md-outlined-button id="btn-stop">Stop</md-outlined-button>
         <md-outlined-button id="btn-restart">Restart</md-outlined-button>
-        <md-outlined-button id="btn-logs">Logs</md-outlined-button>
         <md-outlined-button id="btn-save">Save</md-outlined-button>
         <md-filled-button id="btn-save-apply">Save &amp; Apply</md-filled-button>
         <label class="theme-toggle">
@@ -40,7 +39,14 @@
       </div>
     </header>
 
-    <main class="layout">
+    <nav class="tabbar" aria-label="Dashboard sections">
+      <md-tabs id="main-tabs">
+        <md-primary-tab id="tab-config" active>Configuration</md-primary-tab>
+        <md-primary-tab id="tab-logs">Logs</md-primary-tab>
+      </md-tabs>
+    </nav>
+
+    <main id="config-view" class="layout">
       <section id="col-server">
         <div class="card">
           <h2>Server Info</h2>
@@ -73,10 +79,40 @@
       </section>
     </main>
 
-    <section id="logs-panel" class="logs-panel card hidden">
-      <h2>Server Logs</h2>
-      <div id="logs-output" class="logs-output">(logs appear here when the server is running)</div>
-    </section>
+    <main id="logs-view" class="logs-view hidden">
+      <section id="logs-panel" class="logs-panel card">
+        <div class="logs-header">
+          <h2>Server Logs</h2>
+          <div class="logs-actions">
+            <md-outlined-select id="log-tail-preset" label="Tail lines">
+              <md-select-option value="200" selected>200</md-select-option>
+              <md-select-option value="500">500</md-select-option>
+              <md-select-option value="1000">1000</md-select-option>
+              <md-select-option value="5000">5000</md-select-option>
+              <md-select-option value="custom">Custom</md-select-option>
+            </md-outlined-select>
+            <md-outlined-text-field
+              id="log-tail-custom"
+              class="log-tail-custom hidden"
+              label="Custom lines"
+              type="number"
+              min="1"
+              value="200"
+            ></md-outlined-text-field>
+            <md-icon-button id="btn-log-refresh" aria-label="Refresh logs" title="Refresh logs">
+              <md-icon>refresh</md-icon>
+            </md-icon-button>
+            <md-icon-button id="btn-copy-logs" aria-label="Copy logs" title="Copy logs">
+              <md-icon>content_copy</md-icon>
+            </md-icon-button>
+            <md-icon-button id="btn-download-logs" aria-label="Download logs" title="Download logs">
+              <md-icon>download</md-icon>
+            </md-icon-button>
+          </div>
+        </div>
+        <div id="logs-output" class="logs-output">(logs appear here when the server is running)</div>
+      </section>
+    </main>
 
     <md-dialog id="confirm-dialog">
       <div slot="headline" id="confirm-headline">Confirm</div>
