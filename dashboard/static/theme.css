@@ -1,5 +1,5 @@
 /* Material Design 3 baseline color tokens (light + dark) + dashboard layout.
-   Material Web components read the --md-sys-color-* custom properties below. */
+  Material Web components read the --md-sys-color-* custom properties below. */
 
 :root {
   color-scheme: light;
