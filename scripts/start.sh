@@ -28,6 +28,7 @@ if [[ "${PUID}" -ne 0 && "$(id -u)" -eq 0 ]]; then
 fi
 
 mkdir -p /data
+mkdir -p /data/results
 echo "Starting AC EVO dashboard (container main process) on port ${DASHBOARD_PORT:-8090} ..."
 if [[ -n "${RESULTS_WEBHOOK_URL:-}" ]]; then
   echo "Starting results uploader in background -> ${RESULTS_WEBHOOK_URL} ..."

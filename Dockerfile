@@ -45,8 +45,6 @@ RUN dpkg --add-architecture i386 \
 
 WORKDIR /data
 
-RUN mkdir -p results
-
 ENV PYTHONPATH=/opt/acevo
 EXPOSE 8090
 
