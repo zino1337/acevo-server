@@ -29,4 +29,8 @@ fi
 
 mkdir -p /data
 echo "Starting AC EVO dashboard (container main process) on port ${DASHBOARD_PORT:-8090} ..."
+if [[ -n "${RESULTS_WEBHOOK_URL:-}" ]]; then
+  echo "Starting results uploader in background -> ${RESULTS_WEBHOOK_URL} ..."
+  python3 /opt/acevo/scripts/results_uploader.py &
+fi
 exec python3 -m dashboard
