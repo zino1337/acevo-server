@@ -568,6 +568,77 @@ def load_server_launcher_json(env: dict[str, str], cfg: dict) -> LauncherImport:
     map_launcher_waiting_for_players(launcher, sessions)
     return launcher
 
+def load_mapping_file(scripts_dir: Path, install_data_dir: Path, filename: str):
+    volume_path = install_data_dir / filename
+    bundled_path = scripts_dir / "mappings" / filename
+
+    # 1. Try reading server owned files
+    try:
+        if volume_path.exists():
+            return _read_json(volume_path)
+    except Exception:
+        pass
+
+    # 2. Fallback to the bundled file
+    return _read_json(bundled_path)
+
+def normalize_cars(data) -> list[dict]:
+    """Convert volume format ({"cars": [...]}) or plain list to internal car list."""
+    # Unwrap dict with "cars" key
+    if isinstance(data, dict) and "cars" in data:
+        data = data["cars"]
+
+    if not isinstance(data, list):
+        return []
+
+    cars = []
+    for car in data:
+        if not isinstance(car, dict):
+            continue
+
+        if "name" in car and "internal_name" not in car:
+            car = dict(car)
+            car["internal_name"] = car.pop("name")
+
+        cars.append(car)
+
+    return cars
+
+def load_mod_cars(install_data_dir: Path, existing_cars: list[dict]) -> list[dict]:
+    # Path: <install_dir>/steamapps/compatdata/4564210/pfx/drive_c/users/*/Saved Games/ACE-Server/mods/
+    users_base = install_data_dir / "steamapps" / "compatdata" / "4564210" / "pfx" / "drive_c" / "users"
+    if not users_base.exists():
+        return existing_cars
+
+    known_names = {
+        car["internal_name"]
+        for car in existing_cars
+        if "internal_name" in car
+    }
+
+    for user_dir in users_base.iterdir():
+        if not user_dir.is_dir():
+            continue
+
+        mods_dir = user_dir / "Saved Games" / "ACE-Server" / "mods"
+
+        if not mods_dir.is_dir():
+            continue
+
+        for mod_file in mods_dir.glob("*.json"):
+            try:
+                mod_data = _read_json(mod_file)
+                for car in normalize_cars(mod_data):
+                    internal_name = car.get("internal_name")
+                    if not internal_name or internal_name in known_names:
+                        continue
+
+                    existing_cars.append(car)
+                    known_names.add(internal_name)
+            except Exception:
+                continue
+
+    return existing_cars
 
 @lru_cache(maxsize=1)
 def load_config() -> dict:
@@ -578,10 +649,15 @@ def load_config() -> dict:
 
     defaults = _read_json(root / "defaults.json")
 
+    install_data_dir = Path(os.environ.get("ACEVO_SERVER_INSTALL_DIR", "/data/server"))
+
     try:
-        cars = _read_json(scripts_dir / "mappings" / "cars.json")
+        cars_raw = load_mapping_file(scripts_dir, install_data_dir, "cars.json")
+        cars = normalize_cars(cars_raw)
     except Exception:
         cars = []
+
+    cars = load_mod_cars(install_data_dir, cars)
 
     car_lookup = {normalize_label(item["display_name"]): item["internal_name"] for item in cars}
     cars_data = cars
@@ -589,7 +665,7 @@ def load_config() -> dict:
     tracks_by_event: dict[str, dict[str, dict]] = {"GameModeType_PRACTICE": {}, "GameModeType_RACE_WEEKEND": {}}
 
     try:
-        practice_tracks = _read_json(scripts_dir / "mappings" / "events_practice.json")
+        practice_tracks = load_mapping_file(scripts_dir, install_data_dir, "events_practice.json")
         for track in practice_tracks.get("events", []):
             for alias in track_aliases(track):
                 tracks_by_event["GameModeType_PRACTICE"][alias] = track
@@ -597,7 +673,7 @@ def load_config() -> dict:
         pass
 
     try:
-        race_tracks = _read_json(scripts_dir / "mappings" / "events_race_weekend.json")
+        race_tracks = load_mapping_file(scripts_dir, install_data_dir, "events_race_weekend.json")
         for track in race_tracks.get("events", []):
             for alias in track_aliases(track):
                 tracks_by_event["GameModeType_RACE_WEEKEND"][alias] = track
