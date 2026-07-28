@@ -184,3 +184,7 @@ def build_metadata() -> dict:
         "categories": _categories(),
         "defaults": _defaults(cfg),
     }
+
+def rebuild_metadata():
+    lp.load_config.cache_clear()     # clear the launch_payloads cache
+    build_metadata.cache_clear()     # clear our own cache

@@ -144,6 +144,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
             if route.startswith("/static/"):
                 return self._serve_static(route[len("/static/") :])
             if route == "/api/metadata":
+                metadata.rebuild_metadata()
                 return self._send_json(metadata.build_metadata())
             if route == "/api/config":
                 form = config_io.effective_runtime_form(self.config.config_path, os.environ)
