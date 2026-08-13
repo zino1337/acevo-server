@@ -3,6 +3,7 @@
 // saved config, renders the form, validates live, and drives the server via the API.
 
 import "./vendor/material-web.js";
+import { matchesSelectedClasses, parseMobileSectionState, preferredTrack } from "./dashboard_logic.mjs";
 
 const api = {
   async get(path) {
@@ -27,6 +28,7 @@ const carFilters = {
   types: new Set(),
   eras: new Set(),
   engines: new Set(),
+  classes: new Set(),
   piMin: 0,
   piMax: 100,
   onlySelected: false,
@@ -38,6 +40,15 @@ let activeView = "config";
 
 const LOG_TAIL_DEFAULT = 200;
 const LOG_TAIL_MAX = 50000;
+const MOBILE_SECTION_STORAGE_KEY = "acevo-mobile-sections";
+const mobileLayoutQuery = window.matchMedia("(max-width: 600px)");
+const mobileSectionState = (() => {
+  try {
+    return parseMobileSectionState(localStorage.getItem(MOBILE_SECTION_STORAGE_KEY));
+  } catch {
+    return {};
+  }
+})();
 
 // --- small helpers --------------------------------------------------------------------------
 
@@ -45,6 +56,7 @@ const byId = (id) => document.getElementById(id);
 const isRace = () => /RACE_WEEKEND/i.test(state.event.type || "");
 const trackList = () => (isRace() ? META.tracks.race_weekend : META.tracks.practice);
 const allTracks = () => [...META.tracks.practice, ...META.tracks.race_weekend];
+const lastTrackPerMode = new Map();
 
 function trackPit(token) {
   const found = allTracks().find((t) => t.token === token);
@@ -157,6 +169,78 @@ function confirmDialog(message, headline = "Confirm") {
   });
 }
 
+function saveMobileSectionState() {
+  try {
+    localStorage.setItem(MOBILE_SECTION_STORAGE_KEY, JSON.stringify(mobileSectionState));
+  } catch {
+    /* Storage can be unavailable in private or locked-down browser contexts. */
+  }
+}
+
+function syncMobileCard(card) {
+  const key = card.dataset.mobileSection;
+  const button = card.querySelector(":scope > h2 > .mobile-card-toggle");
+  const content = card.querySelector(":scope > .mobile-card-content");
+  if (!key || !button || !content) return;
+
+  const mobile = mobileLayoutQuery.matches;
+  const open = mobileSectionState[key] !== false;
+  button.disabled = !mobile;
+  button.tabIndex = mobile ? 0 : -1;
+  button.setAttribute("aria-expanded", String(mobile ? open : true));
+  content.hidden = mobile && !open;
+  card.classList.toggle("mobile-collapsed", mobile && !open);
+  const icon = button.querySelector(".mobile-card-toggle-icon");
+  if (icon) icon.textContent = open ? "expand_less" : "expand_more";
+}
+
+function enhanceMobileCard(card) {
+  if (card.dataset.mobileEnhanced === "true") {
+    syncMobileCard(card);
+    return;
+  }
+  const key = card.dataset.mobileSection;
+  const heading = card.querySelector(":scope > h2");
+  if (!key || !heading) return;
+
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "mobile-card-toggle";
+  button.setAttribute("aria-controls", `mobile-section-${key}`);
+
+  const label = document.createElement("span");
+  label.textContent = heading.textContent.trim();
+  const icon = document.createElement("md-icon");
+  icon.className = "mobile-card-toggle-icon";
+  icon.setAttribute("aria-hidden", "true");
+  button.append(label, icon);
+  heading.replaceChildren(button);
+
+  const content = document.createElement("div");
+  content.id = `mobile-section-${key}`;
+  content.className = "mobile-card-content";
+  while (heading.nextSibling) content.append(heading.nextSibling);
+  card.append(content);
+  card.classList.add("mobile-collapsible");
+  card.dataset.mobileEnhanced = "true";
+
+  button.addEventListener("click", () => {
+    if (!mobileLayoutQuery.matches) return;
+    mobileSectionState[key] = content.hidden;
+    saveMobileSectionState();
+    syncMobileCard(card);
+  });
+  syncMobileCard(card);
+}
+
+function setupMobileCollapsibles() {
+  document.querySelectorAll("#config-view .card[data-mobile-section]").forEach(enhanceMobileCard);
+}
+
+function syncMobileCollapsibles() {
+  document.querySelectorAll("#config-view .card[data-mobile-section]").forEach(syncMobileCard);
+}
+
 // --- rendering ------------------------------------------------------------------------------
 
 function renderServer() {
@@ -237,10 +321,15 @@ function renderEvent() {
       value: e.type,
       options: META.enums.event_type,
       onchange: (v) => {
+        lastTrackPerMode.set(e.type, e.track);
+        const previousTrack = e.track;
         e.type = v;
-        if (!trackList().some((t) => t.token === e.track)) {
-          e.track = trackList()[0] ? trackList()[0].token : "";
-        }
+        const tracks = trackList();
+        const remembered = lastTrackPerMode.get(v);
+        e.track = preferredTrack(tracks, previousTrack, remembered);
+        lastTrackPerMode.set(v, e.track);
+        const pit = trackPit(e.track);
+        if (state.server.max_players > pit) state.server.max_players = pit;
         renderEvent();
         renderServer();
         renderSessions();
@@ -272,6 +361,7 @@ function renderEvent() {
         options: trackList().map((t) => ({ value: t.token, label: t.display })),
         onchange: (v) => {
           e.track = v;
+          lastTrackPerMode.set(e.type, v);
           // clamp max players to the new track's pit count
           const pit = trackPit(v);
           if (state.server.max_players > pit) state.server.max_players = pit;
@@ -290,6 +380,7 @@ function categoryGroup() {
     ["type", META.categories.type, carFilters.types],
     ["era", META.categories.era, carFilters.eras],
     ["engine", META.categories.engine, carFilters.engines],
+    ["class", META.categories.class, carFilters.classes],
   ];
   for (const [, options, set_] of groups) {
     for (const opt of options) {
@@ -411,6 +502,7 @@ function carMatches(car) {
   if (carFilters.types.size && !carFilters.types.has(car.type)) return false;
   if (carFilters.eras.size && !carFilters.eras.has(car.era)) return false;
   if (carFilters.engines.size && !carFilters.engines.has(car.engine)) return false;
+  if (!matchesSelectedClasses(car, carFilters.classes)) return false;
   if (car.pi < carFilters.piMin - 1e-6 || car.pi > carFilters.piMax + 1e-6) return false;
   if (carFilters.onlySelected && !carState.get(car.internal_name).is_selected) return false;
   return true;
@@ -507,6 +599,7 @@ function sessionCard(key, title) {
   const card = document.createElement("div");
   card.className = "card";
   card.dataset.session = key;
+  card.dataset.mobileSection = `session-${key}`;
   const h = document.createElement("h2");
   h.textContent = title;
   const grid = document.createElement("div");
@@ -596,6 +689,7 @@ function renderSessions() {
     container.append(sessionCard("warmup", "Warmup"));
     container.append(sessionCard("race", "Race"));
   }
+  setupMobileCollapsibles();
 }
 
 function renderAll() {
@@ -701,6 +795,8 @@ function loadForm(saved) {
   if (!state.event.track || !allTracks().some((t) => t.token === state.event.track)) {
     state.event.track = trackList()[0] ? trackList()[0].token : "";
   }
+  lastTrackPerMode.clear();
+  lastTrackPerMode.set(state.event.type, state.event.track);
 
   carState.clear();
   const savedCars = new Map((saved?.cars || []).map((c) => [c.name, c]));
@@ -716,6 +812,10 @@ function loadForm(saved) {
 
   carFilters.piMin = META.pi_min;
   carFilters.piMax = META.pi_max;
+  carFilters.types.clear();
+  carFilters.eras.clear();
+  carFilters.engines.clear();
+  carFilters.classes.clear();
 }
 
 function scheduleValidate() {
@@ -1056,6 +1156,7 @@ function wireControls() {
   byId("btn-copy-logs").addEventListener("click", copyLogs);
   byId("btn-download-logs").addEventListener("click", downloadLogs);
   byId("theme-switch").addEventListener("change", (e) => setTheme(e.target.selected));
+  mobileLayoutQuery.addEventListener("change", syncMobileCollapsibles);
 }
 
 async function init() {

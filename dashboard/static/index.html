@@ -49,11 +49,11 @@
 
     <main id="config-view" class="layout">
       <section id="col-server">
-        <div class="card">
+        <div class="card" data-mobile-section="server-info">
           <h2>Server Info</h2>
           <div id="server-fields" class="field-grid"></div>
         </div>
-        <div class="card">
+        <div class="card" data-mobile-section="advanced">
           <h2>Advanced</h2>
           <div id="advanced-fields" class="field-grid"></div>
           <div class="cars-meta">Config file: <span id="config-path">—</span></div>
@@ -61,11 +61,11 @@
       </section>
 
       <section id="col-event">
-        <div class="card">
+        <div class="card" data-mobile-section="event-settings">
           <h2>Event Settings</h2>
           <div id="event-fields" class="field-grid"></div>
         </div>
-        <div class="card">
+        <div class="card" data-mobile-section="cars">
           <h2>Cars</h2>
           <div id="cars-container"></div>
         </div>
@@ -73,7 +73,7 @@
 
       <section id="col-sessions">
         <div id="sessions-container"></div>
-        <div class="card">
+        <div class="card" data-mobile-section="preview-validation">
           <h2>Preview &amp; Validation</h2>
           <div id="preview" class="preview"></div>
         </div>

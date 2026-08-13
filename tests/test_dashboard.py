@@ -48,6 +48,21 @@ class MetadataTests(unittest.TestCase):
         self.assertIn("(pit:", track["display"])
         self.assertIsInstance(track["max_pit_slot"], int)
 
+    def test_public_server_racing_classes(self):
+        cars = {car["display_name"]: car["classes"] for car in metadata.build_metadata()["cars"]}
+        expected_counts = {"f1": 2, "gt3": 6, "gt2": 5, "gt4": 3, "cup": 10}
+        for class_name, expected in expected_counts.items():
+            self.assertEqual(sum(class_name in classes for classes in cars.values()), expected, class_name)
+
+        self.assertIn("gt3", cars["Porsche 911 GT3 R Rennsport (992) - Unrestricted"])
+        self.assertNotIn("gt3", cars["Porsche 911 GT3 Cup (992) - ABS TC"])
+        self.assertNotIn("gt4", cars["Porsche 718 Cayman GT4 RS - Standard"])
+        self.assertIn("cup", cars["BMW M2 CS Racing - 350"])
+
+    def test_racing_class_filter_options(self):
+        options = metadata.build_metadata()["categories"]["class"]
+        self.assertEqual([option["value"] for option in options], ["f1", "gt3", "gt2", "gt4", "cup"])
+
 
 class RoundTripTests(unittest.TestCase):
     def test_windows_file_round_trips_without_warnings(self):
@@ -377,6 +392,12 @@ class ServerControlTests(unittest.TestCase):
         self.addCleanup(setattr, server_control, "_proc", None)
         self.addCleanup(setattr, server_control, "_last_exit", None)
         self.addCleanup(setattr, server_control, "_log_thread", None)
+        self.addCleanup(self._join_log_thread)
+
+    def _join_log_thread(self):
+        thread = server_control._log_thread
+        if thread is not None:
+            thread.join(timeout=1)
 
     def test_start_spawns_server_process(self):
         script = self.tmp / "run_server.sh"
@@ -477,6 +498,30 @@ class FrontendStaticTests(unittest.TestCase):
         self.assertIn("All visible cars", source)
         self.assertIn("cars-list-header", source)
         self.assertNotIn("Select none", source)
+
+    def test_class_filters_and_track_memory_are_wired(self):
+        source = (Path(__file__).parents[1] / "dashboard" / "static" / "app.js").read_text(encoding="utf-8")
+        self.assertIn("classes: new Set()", source)
+        self.assertIn("META.categories.class", source)
+        self.assertIn("lastTrackPerMode", source)
+        self.assertIn("preferredTrack", source)
+        self.assertNotIn("SESSION_PRESETS", source)
+
+    def test_mobile_dashboard_breakpoint_exists(self):
+        static = Path(__file__).parents[1] / "dashboard" / "static"
+        css = (static / "theme.css").read_text(encoding="utf-8")
+        html = (static / "index.html").read_text(encoding="utf-8")
+        app_js = (static / "app.js").read_text(encoding="utf-8")
+
+        self.assertIn("@media (max-width: 600px)", css)
+        self.assertIn("grid-template-columns: auto minmax(0, 1fr) 68px 68px", css)
+        self.assertIn("grid-template-columns: repeat(6, minmax(0, 1fr))", css)
+        self.assertIn("safe-area-inset-top", css)
+        self.assertIn("mobile-card-toggle", css)
+        self.assertEqual(html.count('data-mobile-section="'), 5)
+        self.assertIn("card.dataset.mobileSection = `session-${key}`", app_js)
+        self.assertIn("acevo-mobile-sections", app_js)
+        self.assertNotIn("dirty-change-bar", html)
 
 
 class HttpIntegrationTests(unittest.TestCase):
