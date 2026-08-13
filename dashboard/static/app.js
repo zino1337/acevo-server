@@ -6,10 +6,10 @@ import "./vendor/material-web.js";
 import {
   formatLapDelta,
   formatLapTime,
-  matchesSelectedClasses,
+  matchesCategoryFilters,
   parseMobileSectionState,
   preferredTrack,
-  selectedByClasses,
+  selectedByCategoryFilters,
 } from "./dashboard_logic.mjs";
 
 const api = {
@@ -386,12 +386,12 @@ function categoryGroup() {
   const wrap = document.createElement("div");
   wrap.className = "category-group";
   const groups = [
-    [META.categories.type, carFilters.types, false],
-    [META.categories.era, carFilters.eras, false],
-    [META.categories.engine, carFilters.engines, false],
-    [META.categories.class, carFilters.classes, true],
+    [META.categories.type, carFilters.types],
+    [META.categories.era, carFilters.eras],
+    [META.categories.engine, carFilters.engines],
+    [META.categories.class, carFilters.classes],
   ];
-  for (const [options, set_, selectsCars] of groups) {
+  for (const [options, set_] of groups) {
     for (const opt of options) {
       const label = document.createElement("label");
       label.className = "cat";
@@ -400,9 +400,9 @@ function categoryGroup() {
       cb.addEventListener("change", () => {
         if (cb.checked) set_.add(opt.value);
         else set_.delete(opt.value);
-        if (selectsCars) applyClassSelection();
+        applyCategorySelection();
         renderCarList();
-        if (selectsCars) scheduleValidate();
+        scheduleValidate();
       });
       const span = document.createElement("span");
       span.textContent = opt.label;
@@ -413,9 +413,9 @@ function categoryGroup() {
   return wrap;
 }
 
-function applyClassSelection() {
+function applyCategorySelection() {
   for (const car of META.cars) {
-    carState.get(car.internal_name).is_selected = selectedByClasses(car, carFilters.classes);
+    carState.get(car.internal_name).is_selected = selectedByCategoryFilters(car, carFilters);
   }
   carFilters.onlySelected = false;
   const onlySelected = byId("cars-only-selected");
@@ -520,10 +520,7 @@ function renderCars() {
 
 function carMatches(car) {
   if (carFilters.text && !car.display_name.toLowerCase().includes(carFilters.text.toLowerCase())) return false;
-  if (carFilters.types.size && !carFilters.types.has(car.type)) return false;
-  if (carFilters.eras.size && !carFilters.eras.has(car.era)) return false;
-  if (carFilters.engines.size && !carFilters.engines.has(car.engine)) return false;
-  if (!matchesSelectedClasses(car, carFilters.classes)) return false;
+  if (!matchesCategoryFilters(car, carFilters)) return false;
   if (car.pi < carFilters.piMin - 1e-6 || car.pi > carFilters.piMax + 1e-6) return false;
   if (carFilters.onlySelected && !carState.get(car.internal_name).is_selected) return false;
   return true;

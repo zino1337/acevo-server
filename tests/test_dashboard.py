@@ -517,8 +517,8 @@ class FrontendStaticTests(unittest.TestCase):
         self.assertIn("META.categories.class", source)
         self.assertIn("lastTrackPerMode", source)
         self.assertIn("preferredTrack", source)
-        self.assertIn("applyClassSelection", source)
-        self.assertIn("selectedByClasses", source)
+        self.assertIn("applyCategorySelection", source)
+        self.assertIn("selectedByCategoryFilters", source)
         self.assertNotIn("SESSION_PRESETS", source)
 
     def test_car_filter_layout_has_stable_dimensions(self):

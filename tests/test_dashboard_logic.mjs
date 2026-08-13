@@ -4,10 +4,11 @@ import test from "node:test";
 import {
   formatLapDelta,
   formatLapTime,
-  matchesSelectedClasses,
+  hasActiveCategoryFilters,
+  matchesCategoryFilters,
   parseMobileSectionState,
   preferredTrack,
-  selectedByClasses,
+  selectedByCategoryFilters,
   trackIdentity,
 } from "../dashboard/static/dashboard_logic.mjs";
 
@@ -33,19 +34,30 @@ test("first valid track is the final fallback", () => {
   assert.equal(preferredTrack(race, practice[1].token, "missing"), race[0].token);
 });
 
-test("class filters use OR within the class group", () => {
-  const selected = new Set(["gt3", "gt4"]);
-  assert.equal(matchesSelectedClasses({ classes: ["gt3"] }, selected), true);
-  assert.equal(matchesSelectedClasses({ classes: ["cup"] }, selected), false);
-  assert.equal(matchesSelectedClasses({ classes: [] }, new Set()), true);
+test("category filters are additive across groups", () => {
+  const filters = {
+    types: new Set(),
+    eras: new Set(),
+    engines: new Set(["ev"]),
+    classes: new Set(["gt3"]),
+  };
+  assert.equal(matchesCategoryFilters({ engine: "ice", classes: ["gt3"] }, filters), true);
+  assert.equal(matchesCategoryFilters({ engine: "ev", classes: [] }, filters), true);
+  assert.equal(matchesCategoryFilters({ engine: "ice", classes: ["cup"] }, filters), false);
+  assert.equal(selectedByCategoryFilters({ engine: "ev", classes: [] }, filters), true);
 });
 
-test("class quick selection clears cars when no class remains", () => {
-  const gt3 = { classes: ["gt3"] };
-  const cup = { classes: ["cup"] };
-  assert.equal(selectedByClasses(gt3, new Set(["gt3"])), true);
-  assert.equal(selectedByClasses(cup, new Set(["gt3"])), false);
-  assert.equal(selectedByClasses(gt3, new Set()), false);
+test("empty category filters show all cars and select none", () => {
+  const filters = {
+    types: new Set(),
+    eras: new Set(),
+    engines: new Set(),
+    classes: new Set(),
+  };
+  const car = { type: "race", era: "modern", engine: "ice", classes: ["gt3"] };
+  assert.equal(hasActiveCategoryFilters(filters), false);
+  assert.equal(matchesCategoryFilters(car, filters), true);
+  assert.equal(selectedByCategoryFilters(car, filters), false);
 });
 
 test("mobile section preferences accept only boolean entries", () => {

@@ -7,12 +7,22 @@ export function preferredTrack(tracks, previous, remembered) {
   return sameTrack?.token || tracks[0]?.token || "";
 }
 
-export function matchesSelectedClasses(car, selectedClasses) {
-  return !selectedClasses.size || (car.classes || []).some((value) => selectedClasses.has(value));
+export function hasActiveCategoryFilters(filters) {
+  return filters.types.size > 0 || filters.eras.size > 0 || filters.engines.size > 0 || filters.classes.size > 0;
 }
 
-export function selectedByClasses(car, selectedClasses) {
-  return selectedClasses.size > 0 && (car.classes || []).some((value) => selectedClasses.has(value));
+export function matchesCategoryFilters(car, filters) {
+  if (!hasActiveCategoryFilters(filters)) return true;
+  return (
+    filters.types.has(car.type) ||
+    filters.eras.has(car.era) ||
+    filters.engines.has(car.engine) ||
+    (car.classes || []).some((value) => filters.classes.has(value))
+  );
+}
+
+export function selectedByCategoryFilters(car, filters) {
+  return hasActiveCategoryFilters(filters) && matchesCategoryFilters(car, filters);
 }
 
 export function parseMobileSectionState(raw) {
