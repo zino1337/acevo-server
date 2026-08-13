@@ -522,7 +522,10 @@ class FrontendStaticTests(unittest.TestCase):
     def test_car_filter_layout_has_stable_dimensions(self):
         source = (Path(__file__).parents[1] / "dashboard" / "static" / "theme.css").read_text(encoding="utf-8")
         self.assertIn("grid-template-columns: repeat(3, minmax(0, 1fr))", source)
-        self.assertIn("grid-template-columns: repeat(4, minmax(0, 1fr))", source)
+        self.assertIn("grid-template-columns: repeat(7, max-content)", source)
+        self.assertIn("@container (max-width: 540px)", source)
+        self.assertNotIn(".category-column", source)
+        self.assertNotIn(".category-title", source)
         self.assertIn("scrollbar-gutter: stable", source)
         self.assertIn("height: 460px", source)
 

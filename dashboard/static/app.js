@@ -386,18 +386,12 @@ function categoryGroup() {
   const wrap = document.createElement("div");
   wrap.className = "category-group";
   const groups = [
-    ["Type", META.categories.type, carFilters.types, false],
-    ["Era", META.categories.era, carFilters.eras, false],
-    ["Engine", META.categories.engine, carFilters.engines, false],
-    ["Class", META.categories.class, carFilters.classes, true],
+    [META.categories.type, carFilters.types, false],
+    [META.categories.era, carFilters.eras, false],
+    [META.categories.engine, carFilters.engines, false],
+    [META.categories.class, carFilters.classes, true],
   ];
-  for (const [title, options, set_, selectsCars] of groups) {
-    const column = document.createElement("div");
-    column.className = "category-column";
-    const heading = document.createElement("span");
-    heading.className = "category-title";
-    heading.textContent = title;
-    column.append(heading);
+  for (const [options, set_, selectsCars] of groups) {
     for (const opt of options) {
       const label = document.createElement("label");
       label.className = "cat";
@@ -413,9 +407,8 @@ function categoryGroup() {
       const span = document.createElement("span");
       span.textContent = opt.label;
       label.append(cb, span);
-      column.append(label);
+      wrap.append(label);
     }
-    wrap.append(column);
   }
   return wrap;
 }
