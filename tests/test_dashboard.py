@@ -507,6 +507,8 @@ class FrontendStaticTests(unittest.TestCase):
         source = (Path(__file__).parents[1] / "dashboard" / "static" / "app.js").read_text(encoding="utf-8")
         self.assertIn("All visible cars", source)
         self.assertIn("cars-list-header", source)
+        self.assertIn("name.title = car.display_name", source)
+        self.assertIn('nameWrap.className = "car-info"', source)
         self.assertNotIn("Select none", source)
 
     def test_class_filters_and_track_memory_are_wired(self):
@@ -527,6 +529,8 @@ class FrontendStaticTests(unittest.TestCase):
         self.assertNotIn(".category-column", source)
         self.assertNotIn(".category-title", source)
         self.assertIn("scrollbar-gutter: stable", source)
+        self.assertIn("grid-template-columns: auto minmax(0, 1fr) 72px 72px", source)
+        self.assertIn("overflow-x: hidden", source)
         self.assertIn("height: 460px", source)
 
     def test_mobile_dashboard_breakpoint_exists(self):
@@ -536,7 +540,8 @@ class FrontendStaticTests(unittest.TestCase):
         app_js = (static / "app.js").read_text(encoding="utf-8")
 
         self.assertIn("@media (max-width: 600px)", css)
-        self.assertIn("grid-template-columns: auto minmax(0, 1fr) 68px 68px", css)
+        self.assertIn("@media (max-width: 420px)", css)
+        self.assertIn("grid-template-columns: auto minmax(0, 1fr) 60px 60px", css)
         self.assertIn("grid-template-columns: repeat(6, minmax(0, 1fr))", css)
         self.assertIn("safe-area-inset-top", css)
         self.assertIn("mobile-card-toggle", css)

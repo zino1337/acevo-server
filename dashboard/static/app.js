@@ -553,12 +553,15 @@ function renderCarList() {
     });
 
     const nameWrap = document.createElement("div");
+    nameWrap.className = "car-info";
     const name = document.createElement("div");
     name.className = "car-name";
     name.textContent = car.display_name;
+    name.title = car.display_name;
     const pi = document.createElement("div");
     pi.className = "car-pi";
     pi.textContent = `Pi ${car.pi} · ${car.type}/${car.era}/${car.engine}`;
+    pi.title = pi.textContent;
     nameWrap.append(name, pi);
 
     const ballast = textField({

@@ -528,7 +528,7 @@ md-outlined-select {
 
 .cars-list-header {
   display: grid;
-  grid-template-columns: auto 1fr 72px 72px;
+  grid-template-columns: auto minmax(0, 1fr) 72px 72px;
   align-items: center;
   gap: 8px;
   padding: 8px 10px;
@@ -550,6 +550,7 @@ md-outlined-select {
 
 .cars-list {
   height: 460px;
+  overflow-x: hidden;
   overflow-y: auto;
   scrollbar-gutter: stable;
   border: 1px solid var(--md-sys-color-outline-variant);
@@ -558,7 +559,7 @@ md-outlined-select {
 
 .car-row {
   display: grid;
-  grid-template-columns: auto 1fr 72px 72px;
+  grid-template-columns: auto minmax(0, 1fr) 72px 72px;
   align-items: center;
   gap: 8px;
   padding: 8px 10px;
@@ -567,6 +568,12 @@ md-outlined-select {
 .car-row:last-child {
   border-bottom: none;
 }
+
+.car-info {
+  min-width: 0;
+  overflow: hidden;
+}
+
 .car-row .car-name {
   font-size: 0.85rem;
   overflow: hidden;
@@ -576,10 +583,15 @@ md-outlined-select {
 .car-row .car-pi {
   font-size: 0.72rem;
   color: var(--md-sys-color-on-surface-variant);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .car-row md-outlined-text-field {
   --md-outlined-text-field-top-space: 6px;
   --md-outlined-text-field-bottom-space: 6px;
+  min-width: 0;
+  width: 72px;
 }
 .cars-meta {
   font-size: 0.8rem;
@@ -865,7 +877,7 @@ md-outlined-select {
 
   .cars-list-header,
   .car-row {
-    grid-template-columns: auto minmax(0, 1fr) 68px 68px;
+    grid-template-columns: auto minmax(0, 1fr) 60px 60px;
     gap: 4px;
     padding-left: 6px;
     padding-right: 6px;
@@ -993,7 +1005,7 @@ md-outlined-select {
   }
 }
 
-@media (max-width: 360px) {
+@media (max-width: 420px) {
   .theme-toggle md-switch {
     transform: scale(0.86);
   }
