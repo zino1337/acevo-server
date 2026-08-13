@@ -128,7 +128,7 @@ This section is shortened on Docker Hub. See the full table in the GitHub README
 | `RACE_DURATION_TYPE`                   | `Time`                         | Race duration mode: `Time` or `Laps`.              |
 | `RACE_MIN_WAITING_FOR_PLAYERS_SECONDS` | `10`                           | The minimum wait to start the race.                |
 | `RACE_MAX_WAITING_FOR_PLAYERS_SECONDS` | `60`                           | The maximum wait to start the race.                |
-| `AUTO_UPDATE`                          | `true`                         | Updates the dedicated server before startup.       |
+| `AUTO_UPDATE`                          | `true`                         | Container-start update; server restarts skip it.   |
 | `AUTO_START_SERVER`                    | `true`                         | Start the server automatically with the container. |
 | `ACEVO_FORCE_SOFTWARE_RENDERING`       | `true`                         | Enables default no-GPU host compatibility.         |
 | `DASHBOARD_PORT`                       | `8090`                         | Web dashboard port.                                |

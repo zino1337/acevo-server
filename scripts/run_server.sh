@@ -5,7 +5,6 @@
 # Assumes the PUID/PGID switch already happened in start.sh.
 set -euo pipefail
 
-AUTO_UPDATE="${AUTO_UPDATE:-true}"
 APP_ID=4564210
 SERVER_INSTALL_DIR=/data/server
 DEDICATED_EXE_NAME=AssettoCorsaEVOServer.exe
@@ -254,10 +253,6 @@ print_crash_hint() {
     echo "Detected resource limits: cpu=${RESOURCE_CPU_LIMIT} mem=${RESOURCE_MEM_MIB} MiB" >&2
   fi
 }
-
-if [[ "${AUTO_UPDATE,,}" == "true" ]]; then
-  /opt/acevo/scripts/update.sh
-fi
 
 configure_proton_runtime
 log_fingerprint

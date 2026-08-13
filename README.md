@@ -102,7 +102,7 @@ Set or adjust in `.env` or in the docker compose file.
 | ------------------------------------------------ | ------------------------------ | ------- | -------------------------------------------------------------------------------------------------------------- |
 | `ACEVO_FORCE_SOFTWARE_RENDERING`                 | `true`                         | boolean | Forces Proton/WineD3D and Mesa llvmpipe software rendering for broad no-GPU host compatibility.                |
 | `AUTO_START_SERVER`                              | `true`                         | boolean | Start the AC EVO server automatically when the container starts (the dashboard can stop/restart it).           |
-| `AUTO_UPDATE`                                    | `true`                         | boolean | Updates the dedicated server before startup.                                                                   |
+| `AUTO_UPDATE`                                    | `true`                         | boolean | Updates the dedicated server once when the container starts; dashboard server restarts skip the update.        |
 | `DASHBOARD_PASSWORD`                             | empty                          | string  | Web dashboard Basic Auth password; empty disables auth (public). See the Web Dashboard section.                |
 | `DASHBOARD_PORT`                                 | `8090`                         | integer | Port the web dashboard listens on.                                                                             |
 | `DASHBOARD_USER`                                 | `admin`                        | string  | Web dashboard Basic Auth username.                                                                             |
