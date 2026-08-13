@@ -9,6 +9,7 @@ import {
   matchesSelectedClasses,
   parseMobileSectionState,
   preferredTrack,
+  selectedByClasses,
 } from "./dashboard_logic.mjs";
 
 const api = {
@@ -385,12 +386,18 @@ function categoryGroup() {
   const wrap = document.createElement("div");
   wrap.className = "category-group";
   const groups = [
-    ["type", META.categories.type, carFilters.types],
-    ["era", META.categories.era, carFilters.eras],
-    ["engine", META.categories.engine, carFilters.engines],
-    ["class", META.categories.class, carFilters.classes],
+    ["Type", META.categories.type, carFilters.types, false],
+    ["Era", META.categories.era, carFilters.eras, false],
+    ["Engine", META.categories.engine, carFilters.engines, false],
+    ["Class", META.categories.class, carFilters.classes, true],
   ];
-  for (const [, options, set_] of groups) {
+  for (const [title, options, set_, selectsCars] of groups) {
+    const column = document.createElement("div");
+    column.className = "category-column";
+    const heading = document.createElement("span");
+    heading.className = "category-title";
+    heading.textContent = title;
+    column.append(heading);
     for (const opt of options) {
       const label = document.createElement("label");
       label.className = "cat";
@@ -399,15 +406,27 @@ function categoryGroup() {
       cb.addEventListener("change", () => {
         if (cb.checked) set_.add(opt.value);
         else set_.delete(opt.value);
+        if (selectsCars) applyClassSelection();
         renderCarList();
+        if (selectsCars) scheduleValidate();
       });
       const span = document.createElement("span");
       span.textContent = opt.label;
       label.append(cb, span);
-      wrap.append(label);
+      column.append(label);
     }
+    wrap.append(column);
   }
   return wrap;
+}
+
+function applyClassSelection() {
+  for (const car of META.cars) {
+    carState.get(car.internal_name).is_selected = selectedByClasses(car, carFilters.classes);
+  }
+  carFilters.onlySelected = false;
+  const onlySelected = byId("cars-only-selected");
+  if (onlySelected) onlySelected.checked = false;
 }
 
 function piRow() {
@@ -460,6 +479,7 @@ function renderCars() {
   const onlyWrap = document.createElement("label");
   onlyWrap.className = "cat";
   const onlyCb = document.createElement("md-checkbox");
+  onlyCb.id = "cars-only-selected";
   onlyCb.checked = carFilters.onlySelected;
   onlyCb.addEventListener("change", () => {
     carFilters.onlySelected = onlyCb.checked;

@@ -7,6 +7,7 @@ import {
   matchesSelectedClasses,
   parseMobileSectionState,
   preferredTrack,
+  selectedByClasses,
   trackIdentity,
 } from "../dashboard/static/dashboard_logic.mjs";
 
@@ -37,6 +38,14 @@ test("class filters use OR within the class group", () => {
   assert.equal(matchesSelectedClasses({ classes: ["gt3"] }, selected), true);
   assert.equal(matchesSelectedClasses({ classes: ["cup"] }, selected), false);
   assert.equal(matchesSelectedClasses({ classes: [] }, new Set()), true);
+});
+
+test("class quick selection clears cars when no class remains", () => {
+  const gt3 = { classes: ["gt3"] };
+  const cup = { classes: ["cup"] };
+  assert.equal(selectedByClasses(gt3, new Set(["gt3"])), true);
+  assert.equal(selectedByClasses(cup, new Set(["gt3"])), false);
+  assert.equal(selectedByClasses(gt3, new Set()), false);
 });
 
 test("mobile section preferences accept only boolean entries", () => {

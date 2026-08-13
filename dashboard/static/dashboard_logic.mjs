@@ -11,6 +11,10 @@ export function matchesSelectedClasses(car, selectedClasses) {
   return !selectedClasses.size || (car.classes || []).some((value) => selectedClasses.has(value));
 }
 
+export function selectedByClasses(car, selectedClasses) {
+  return selectedClasses.size > 0 && (car.classes || []).some((value) => selectedClasses.has(value));
+}
+
 export function parseMobileSectionState(raw) {
   if (!raw) return {};
   try {
