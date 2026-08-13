@@ -12,7 +12,7 @@ import urllib.request
 from pathlib import Path
 from unittest.mock import patch
 
-from dashboard import app, config_io, metadata, server_control
+from dashboard import app, config_io, live, metadata, server_control
 from scripts import launch_payloads
 
 FIXTURE = Path(__file__).parent / "fixtures" / "server_launcher_windows_sample.json"
@@ -393,6 +393,8 @@ class ServerControlTests(unittest.TestCase):
         self.addCleanup(setattr, server_control, "_last_exit", None)
         self.addCleanup(setattr, server_control, "_log_thread", None)
         self.addCleanup(self._join_log_thread)
+        live.reset()
+        self.addCleanup(live.reset)
 
     def _join_log_thread(self):
         thread = server_control._log_thread
@@ -406,6 +408,7 @@ class ServerControlTests(unittest.TestCase):
         with (
             patch.object(server_control, "RUN_SERVER_SCRIPT", script),
             patch.object(server_control.subprocess, "Popen", return_value=fake) as popen,
+            patch.object(live, "reset") as reset_live,
         ):
             result = server_control.start()
         self.assertTrue(result["ok"])
@@ -416,6 +419,7 @@ class ServerControlTests(unittest.TestCase):
         self.assertEqual(kwargs["stdout"], subprocess.PIPE)
         self.assertEqual(kwargs["stderr"], subprocess.STDOUT)
         self.assertTrue(kwargs["start_new_session"])
+        reset_live.assert_called_once_with()
 
     def test_start_missing_script_errors(self):
         with patch.object(server_control, "RUN_SERVER_SCRIPT", self.tmp / "nope.sh"):
@@ -441,12 +445,16 @@ class ServerControlTests(unittest.TestCase):
     def test_stop_signals_process_group(self):
         # running for the initial check, then reported finished so the wait loop exits promptly
         server_control._proc = FakeProc(pid=4242, poll_result=0, alive_polls=1)
-        with patch.object(server_control.os, "killpg", create=True) as killpg:
+        with (
+            patch.object(server_control.os, "killpg", create=True) as killpg,
+            patch.object(live, "reset") as reset_live,
+        ):
             result = server_control.stop()
         self.assertFalse(result["running"])
         killpg.assert_called()
         self.assertEqual(killpg.call_args_list[0][0][1], server_control.signal.SIGTERM)
         self.assertIsNone(server_control._proc)
+        reset_live.assert_called_once_with()
 
     def test_logs_returns_tail(self):
         log = self.tmp / "logs" / "server.log"
@@ -457,7 +465,8 @@ class ServerControlTests(unittest.TestCase):
         self.assertEqual(out["lines"], "line2\nline3")
 
     def test_tee_output_writes_log_file_and_stdout(self):
-        proc = FakeProc(stdout=io.BytesIO(b"line1\nline2\n"))
+        output = b"connecting gamecar 47efe85b7c69e844-6d27cbdfe96760ab (Max Bearman | 76561198200085390)\nline2\n"
+        proc = FakeProc(stdout=io.BytesIO(output))
         captured = io.BytesIO()
 
         class Stdout:
@@ -467,8 +476,9 @@ class ServerControlTests(unittest.TestCase):
         with patch.object(server_control.sys, "stdout", Stdout()):
             server_control._tee_output(proc, server_control.LOG_FILE)
 
-        self.assertEqual(server_control.LOG_FILE.read_bytes(), b"line1\nline2\n")
-        self.assertEqual(captured.getvalue(), b"line1\nline2\n")
+        self.assertEqual(server_control.LOG_FILE.read_bytes(), output)
+        self.assertEqual(captured.getvalue(), output)
+        self.assertEqual(live.snapshot()["drivers"][0]["name"], "Max Bearman")
 
 
 class BasicAuthTests(unittest.TestCase):
@@ -523,6 +533,21 @@ class FrontendStaticTests(unittest.TestCase):
         self.assertIn("acevo-mobile-sections", app_js)
         self.assertNotIn("dirty-change-bar", html)
 
+    def test_live_tab_polls_only_while_active(self):
+        static = Path(__file__).parents[1] / "dashboard" / "static"
+        css = (static / "theme.css").read_text(encoding="utf-8")
+        html = (static / "index.html").read_text(encoding="utf-8")
+        app_js = (static / "app.js").read_text(encoding="utf-8")
+
+        self.assertIn('id="tab-live"', html)
+        self.assertIn('id="live-view"', html)
+        self.assertIn("/api/server/live", app_js)
+        self.assertIn("liveTimer = setInterval(refreshLive, 4000)", app_js)
+        self.assertIn('if (view === "live") startLivePolling()', app_js)
+        self.assertIn("else stopLivePolling()", app_js)
+        self.assertIn(".live-driver-row", css)
+        self.assertIn("grid-template-columns: 32px repeat(3, minmax(0, 1fr))", css)
+
 
 class HttpIntegrationTests(unittest.TestCase):
     def make(self, password, config_path=Path("nonexistent.json")):
@@ -561,6 +586,42 @@ class HttpIntegrationTests(unittest.TestCase):
         try:
             with self.get(port, "/api/metadata") as resp:
                 self.assertEqual(resp.status, 200)
+        finally:
+            httpd.shutdown()
+            httpd.server_close()
+
+    def test_live_route_is_authenticated_and_omits_private_data(self):
+        httpd, port = self.make("s3cret")
+        snapshot = {
+            "players": 1,
+            "drivers": [
+                {
+                    "car_id": "runtime-id",
+                    "name": "Driver",
+                    "car": "preset_m4gt3_mech_1",
+                    "number": 20,
+                    "laps": 3,
+                    "last_lap_ms": 98321,
+                    "best_lap_ms": 97210,
+                }
+            ],
+        }
+        try:
+            with self.assertRaises(urllib.error.HTTPError) as ctx:
+                self.get(port, "/api/server/live")
+            self.assertEqual(ctx.exception.code, 401)
+            ctx.exception.close()
+
+            with (
+                patch.object(server_control, "status", return_value={"running": True}),
+                patch.object(live, "snapshot", return_value=snapshot),
+            ):
+                with self.get(port, "/api/server/live", auth="admin:s3cret") as resp:
+                    body = json.loads(resp.read())
+            self.assertTrue(body["running"])
+            self.assertEqual(body["drivers"][0]["best_lap_ms"], 97210)
+            self.assertNotIn("steam_id", json.dumps(body))
+            self.assertNotIn("listing", body)
         finally:
             httpd.shutdown()
             httpd.server_close()

@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  formatLapDelta,
+  formatLapTime,
   matchesSelectedClasses,
   parseMobileSectionState,
   preferredTrack,
@@ -44,4 +46,18 @@ test("mobile section preferences accept only boolean entries", () => {
   });
   assert.deepEqual(parseMobileSectionState("invalid json"), {});
   assert.deepEqual(parseMobileSectionState("[]"), {});
+});
+
+test("lap times use compact minute formatting", () => {
+  assert.equal(formatLapTime(98321), "1:38.321");
+  assert.equal(formatLapTime(0), "0:00.000");
+  assert.equal(formatLapTime(null), "—");
+  assert.equal(formatLapTime(undefined), "—");
+  assert.equal(formatLapTime(-1), "—");
+});
+
+test("lap deltas are omitted for the fastest and invalid laps", () => {
+  assert.equal(formatLapDelta(98321, 97210), "+1.111");
+  assert.equal(formatLapDelta(97210, 97210), "");
+  assert.equal(formatLapDelta(null, 97210), "");
 });

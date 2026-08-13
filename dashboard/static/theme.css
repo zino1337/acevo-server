@@ -138,7 +138,7 @@ body {
 }
 
 .tabbar md-tabs {
-  max-width: 360px;
+  max-width: 480px;
 }
 
 /* Status chip */
@@ -216,6 +216,146 @@ body {
 md-outlined-text-field,
 md-outlined-select {
   width: 100%;
+}
+
+/* Live session */
+.live-view {
+  padding: 16px 20px 40px;
+}
+
+.live-summary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 180px));
+  gap: 12px;
+}
+
+.live-stat {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.live-stat span {
+  color: var(--md-sys-color-on-surface-variant);
+  font-size: 0.78rem;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.live-stat strong {
+  color: var(--md-sys-color-primary);
+  font-family: "Roboto Mono", ui-monospace, monospace;
+  font-size: 1.4rem;
+}
+
+.live-panel {
+  margin: 0;
+}
+
+.live-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.live-header h2 {
+  margin: 0;
+}
+
+.live-updated,
+.live-message {
+  color: var(--md-sys-color-on-surface-variant);
+  font-size: 0.82rem;
+}
+
+.live-message {
+  padding: 28px 12px;
+  text-align: center;
+}
+
+.live-message.error {
+  background: var(--md-sys-color-error-container);
+  border-radius: 12px;
+  color: var(--md-sys-color-on-error-container);
+}
+
+.live-drivers {
+  overflow: hidden;
+  border: 1px solid var(--md-sys-color-outline-variant);
+  border-radius: 12px;
+}
+
+.live-driver-row {
+  display: grid;
+  grid-template-columns: 48px minmax(130px, 1.3fr) minmax(180px, 2fr) 64px 104px 104px;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--md-sys-color-outline-variant);
+}
+
+#live-driver-rows .live-driver-row:last-child {
+  border-bottom: 0;
+}
+
+.live-driver-head {
+  background: var(--md-sys-color-surface-container);
+  color: var(--md-sys-color-on-surface-variant);
+  font-size: 0.72rem;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.live-driver-name,
+.live-car {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.live-driver-name {
+  font-weight: 500;
+}
+
+.live-car {
+  color: var(--md-sys-color-on-surface-variant);
+  font-size: 0.82rem;
+}
+
+.live-number,
+.live-laps,
+.live-best,
+.live-last {
+  font-family: "Roboto Mono", ui-monospace, monospace;
+  font-size: 0.82rem;
+}
+
+.live-laps,
+.live-best,
+.live-last {
+  text-align: right;
+}
+
+.live-mobile-label {
+  display: none;
+}
+
+.live-delta {
+  display: block;
+  color: var(--md-sys-color-on-surface-variant);
+  font-size: 0.7rem;
+}
+
+.live-fastest {
+  color: var(--md-sys-color-primary);
+  font-weight: 500;
 }
 
 /* Configuration profiles tab */
@@ -611,6 +751,7 @@ md-outlined-select {
 
   .tabbar,
   .layout,
+  .live-view,
   .profiles-view,
   .logs-view {
     padding-left: 8px;
@@ -722,9 +863,94 @@ md-outlined-select {
     min-height: 55vh;
   }
 
+  .live-view,
   .profiles-view,
   .logs-view {
     padding-bottom: calc(40px + env(safe-area-inset-bottom));
+  }
+
+  .live-view {
+    padding-top: 8px;
+  }
+
+  .live-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .live-stat {
+    gap: 8px;
+  }
+
+  .live-header {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .live-driver-head {
+    display: none;
+  }
+
+  .live-driver-row {
+    grid-template-columns: 32px repeat(3, minmax(0, 1fr));
+    gap: 6px 8px;
+    padding: 10px;
+  }
+
+  .live-number {
+    grid-column: 1;
+    grid-row: 1 / 4;
+    align-self: stretch;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 8px;
+    background: var(--md-sys-color-surface-container);
+  }
+
+  .live-driver-name,
+  .live-car {
+    grid-column: 2 / 5;
+  }
+
+  .live-driver-name {
+    grid-row: 1;
+  }
+
+  .live-car {
+    grid-row: 2;
+  }
+
+  .live-laps,
+  .live-best,
+  .live-last {
+    grid-row: 3;
+    min-width: 0;
+    text-align: left;
+  }
+
+  .live-laps {
+    grid-column: 2;
+  }
+
+  .live-best {
+    grid-column: 3;
+  }
+
+  .live-last {
+    grid-column: 4;
+  }
+
+  .live-mobile-label {
+    display: block;
+    margin-bottom: 2px;
+    color: var(--md-sys-color-on-surface-variant);
+    font-family: "Roboto", "Segoe UI", system-ui, sans-serif;
+    font-size: 0.65rem;
+    font-weight: 500;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
   }
 }
 

@@ -17,6 +17,8 @@ import threading
 import time
 from pathlib import Path
 
+from . import live
+
 REPO_ROOT = Path(__file__).resolve().parent.parent
 RUN_SERVER_SCRIPT = Path(os.environ.get("ACEVO_RUN_SERVER", str(REPO_ROOT / "scripts" / "run_server.sh")))
 LOG_FILE = Path(os.environ.get("ACEVO_SERVER_LOG", "/data/logs/server.log"))
@@ -39,7 +41,7 @@ def _write_stdout(data: bytes) -> None:
     sys.stdout.flush()
 
 
-def _tee_output(proc: subprocess.Popen, log_file: Path) -> None:
+def _tee_output(proc: subprocess.Popen, log_file: Path, generation: int | None = None) -> None:
     if proc.stdout is None:
         return
     try:
@@ -51,6 +53,10 @@ def _tee_output(proc: subprocess.Popen, log_file: Path) -> None:
                 if isinstance(chunk, str):
                     chunk = chunk.encode("utf-8", errors="replace")
                 log_fh.write(chunk)
+                try:
+                    live.consume_line(chunk, generation)
+                except Exception:  # noqa: BLE001 - live data must never affect the server process
+                    pass
                 _write_stdout(chunk)
     finally:
         try:
@@ -71,6 +77,7 @@ def _running_locked() -> bool:
         _log_thread.join(timeout=0.2)
         _log_thread = None
     _proc = None
+    live.reset()
     return False
 
 
@@ -95,6 +102,7 @@ def start() -> dict:
             LOG_FILE.parent.mkdir(parents=True, exist_ok=True)
             with open(LOG_FILE, "wb", buffering=0):
                 pass  # fresh log per server run
+            generation = live.reset()
         except OSError as exc:
             return {"ok": False, "error": f"cannot open log file {LOG_FILE}: {exc}"}
         try:
@@ -108,7 +116,7 @@ def start() -> dict:
             )
         except OSError as exc:
             return {"ok": False, "error": str(exc)}
-        _log_thread = threading.Thread(target=_tee_output, args=(_proc, LOG_FILE), daemon=True)
+        _log_thread = threading.Thread(target=_tee_output, args=(_proc, LOG_FILE, generation), daemon=True)
         _log_thread.start()
         _last_exit = None
         return {"ok": True, "running": True, "pid": _proc.pid}
@@ -118,6 +126,7 @@ def stop() -> dict:
     with _lock:
         global _proc, _last_exit, _log_thread
         if not _running_locked():
+            live.reset()
             return {"ok": True, "running": False, "message": "server not running"}
         pid = _proc.pid
         _signal_group(pid, signal.SIGTERM)
@@ -132,8 +141,9 @@ def stop() -> dict:
             _last_exit = None
         if _log_thread is not None:
             _log_thread.join(timeout=2)
-            _log_thread = None
+        _log_thread = None
         _proc = None
+        live.reset()
         return {"ok": True, "running": False}
 
 

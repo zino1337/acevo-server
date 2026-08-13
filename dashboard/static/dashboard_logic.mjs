@@ -21,3 +21,18 @@ export function parseMobileSectionState(raw) {
     return {};
   }
 }
+
+export function formatLapTime(value) {
+  if (value == null || value === "") return "—";
+  const total = Math.round(Number(value));
+  if (!Number.isFinite(total) || total < 0) return "—";
+  const minutes = Math.floor(total / 60000);
+  const seconds = Math.floor((total % 60000) / 1000);
+  const millis = total % 1000;
+  return `${minutes}:${String(seconds).padStart(2, "0")}.${String(millis).padStart(3, "0")}`;
+}
+
+export function formatLapDelta(value, fastest) {
+  if (!Number.isFinite(value) || !Number.isFinite(fastest) || value <= fastest) return "";
+  return `+${((value - fastest) / 1000).toFixed(3)}`;
+}

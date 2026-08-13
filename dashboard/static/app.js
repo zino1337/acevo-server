@@ -3,7 +3,13 @@
 // saved config, renders the form, validates live, and drives the server via the API.
 
 import "./vendor/material-web.js";
-import { matchesSelectedClasses, parseMobileSectionState, preferredTrack } from "./dashboard_logic.mjs";
+import {
+  formatLapDelta,
+  formatLapTime,
+  matchesSelectedClasses,
+  parseMobileSectionState,
+  preferredTrack,
+} from "./dashboard_logic.mjs";
 
 const api = {
   async get(path) {
@@ -36,6 +42,8 @@ const carFilters = {
 let validateTimer = null;
 let logsTimer = null;
 let logTailTimer = null;
+let liveTimer = null;
+let liveRequestPending = false;
 let activeView = "config";
 
 const LOG_TAIL_DEFAULT = 200;
@@ -972,6 +980,7 @@ async function doStart() {
   toast(r.ok ? "Server starting…" : "Start failed: " + (r.error || r.stderr || ""));
   refreshStatus();
   refreshLogsSoon();
+  refreshLiveSoon();
 }
 
 async function doStop() {
@@ -979,6 +988,7 @@ async function doStop() {
   const r = await api.post("/api/server/stop");
   toast(r.ok ? "Server stopped." : "Stop failed: " + (r.error || r.stderr || ""));
   refreshStatus();
+  refreshLiveSoon();
 }
 
 async function doRestart() {
@@ -987,6 +997,7 @@ async function doRestart() {
   toast(r.ok ? "Restarting…" : "Restart failed: " + (r.error || r.stderr || ""));
   refreshStatus();
   refreshLogsSoon();
+  refreshLiveSoon();
 }
 
 async function doSave() {
@@ -1011,6 +1022,130 @@ async function doSaveApply() {
   toast(r.ok ? "Applied — server restarting." : "Restart failed: " + (r.error || r.stderr || ""));
   refreshStatus();
   refreshLogsSoon();
+  refreshLiveSoon();
+}
+
+// --- live session ---------------------------------------------------------------------------
+
+function liveCarLabel(internalName) {
+  const car = META.cars.find((entry) => entry.internal_name === internalName);
+  return car ? car.display_name : internalName || "Unknown car";
+}
+
+function liveMetric(className, label, value) {
+  const cell = document.createElement("span");
+  cell.className = className;
+  const mobileLabel = document.createElement("span");
+  mobileLabel.className = "live-mobile-label";
+  mobileLabel.textContent = label;
+  const content = document.createElement("span");
+  content.textContent = value;
+  cell.append(mobileLabel, content);
+  return { cell, content };
+}
+
+function renderLiveDriver(driver, fastest) {
+  const row = document.createElement("div");
+  row.className = "live-driver-row";
+  row.setAttribute("role", "row");
+
+  const number = document.createElement("span");
+  number.className = "live-number";
+  number.textContent = driver.number ?? "—";
+
+  const name = document.createElement("span");
+  name.className = "live-driver-name";
+  name.textContent = driver.name || "Unknown driver";
+  name.title = name.textContent;
+
+  const car = document.createElement("span");
+  car.className = "live-car";
+  car.textContent = liveCarLabel(driver.car);
+  car.title = car.textContent;
+
+  const laps = liveMetric("live-laps", "Laps", String(driver.laps || 0));
+  const best = liveMetric("live-best", "Best", formatLapTime(driver.best_lap_ms));
+  const delta = formatLapDelta(driver.best_lap_ms, fastest);
+  if (driver.best_lap_ms === fastest) best.cell.classList.add("live-fastest");
+  if (delta) {
+    const deltaLabel = document.createElement("small");
+    deltaLabel.className = "live-delta";
+    deltaLabel.textContent = delta;
+    best.cell.append(deltaLabel);
+  }
+  const last = liveMetric("live-last", "Last", formatLapTime(driver.last_lap_ms));
+
+  row.append(number, name, car, laps.cell, best.cell, last.cell);
+  return row;
+}
+
+function showLiveMessage(message, error = false) {
+  const panel = byId("live-message");
+  panel.textContent = message;
+  panel.classList.remove("hidden");
+  panel.classList.toggle("error", error);
+}
+
+function renderLive(data) {
+  const drivers = Array.isArray(data.drivers) ? data.drivers : [];
+  byId("live-connected").textContent = String(Math.max(Number(data.players) || 0, drivers.length));
+  byId("live-slots").textContent = String(state.server.max_players ?? "—");
+  byId("live-updated").textContent = `Updated ${new Date().toLocaleTimeString()}`;
+
+  const list = byId("live-drivers");
+  const rows = byId("live-driver-rows");
+  if (!data.running) {
+    rows.replaceChildren();
+    list.classList.add("hidden");
+    showLiveMessage("Server is stopped.");
+    return;
+  }
+  if (!drivers.length) {
+    rows.replaceChildren();
+    list.classList.add("hidden");
+    showLiveMessage("No drivers connected.");
+    return;
+  }
+
+  const fastest = drivers.reduce(
+    (best, driver) =>
+      Number.isFinite(driver.best_lap_ms) && (best == null || driver.best_lap_ms < best) ? driver.best_lap_ms : best,
+    null,
+  );
+  rows.replaceChildren(...drivers.map((driver) => renderLiveDriver(driver, fastest)));
+  byId("live-message").classList.add("hidden");
+  list.classList.remove("hidden");
+}
+
+async function refreshLive() {
+  if (liveRequestPending) return;
+  liveRequestPending = true;
+  try {
+    const data = await api.get("/api/server/live");
+    if (typeof data?.running !== "boolean" || !Array.isArray(data.drivers)) throw new Error("invalid live response");
+    renderLive(data);
+  } catch {
+    showLiveMessage("Live data temporarily unavailable. Retrying…", true);
+  } finally {
+    liveRequestPending = false;
+  }
+}
+
+function startLivePolling() {
+  clearInterval(liveTimer);
+  refreshLive();
+  liveTimer = setInterval(refreshLive, 4000);
+}
+
+function stopLivePolling() {
+  clearInterval(liveTimer);
+  liveTimer = null;
+}
+
+function refreshLiveSoon() {
+  setTimeout(() => {
+    if (activeView === "live") refreshLive();
+  }, 500);
 }
 
 async function refreshLogs() {
@@ -1040,19 +1175,23 @@ function stopLogPolling() {
   logsTimer = null;
 }
 
-const VIEW_INDEX = { config: 0, logs: 1, profiles: 2 };
+const VIEW_INDEX = { config: 0, live: 1, logs: 2, profiles: 3 };
 
 function setActiveView(view) {
   activeView = view;
   byId("config-view").classList.toggle("hidden", view !== "config");
+  byId("live-view").classList.toggle("hidden", view !== "live");
   byId("logs-view").classList.toggle("hidden", view !== "logs");
   byId("profiles-view").classList.toggle("hidden", view !== "profiles");
   byId("tab-config").active = view === "config";
+  byId("tab-live").active = view === "live";
   byId("tab-logs").active = view === "logs";
   byId("tab-profiles").active = view === "profiles";
   byId("main-tabs").activeTabIndex = VIEW_INDEX[view] ?? 0;
   if (view === "logs") startLogPolling();
   else stopLogPolling();
+  if (view === "live") startLivePolling();
+  else stopLivePolling();
   if (view === "profiles") loadProfiles();
 }
 
@@ -1148,6 +1287,7 @@ function wireControls() {
   byId("btn-save-apply").addEventListener("click", doSaveApply);
   byId("btn-profile-save").addEventListener("click", saveProfile);
   byId("tab-config").addEventListener("click", () => setActiveView("config"));
+  byId("tab-live").addEventListener("click", () => setActiveView("live"));
   byId("tab-logs").addEventListener("click", () => setActiveView("logs"));
   byId("tab-profiles").addEventListener("click", () => setActiveView("profiles"));
   byId("log-tail-preset").addEventListener("change", handleLogTailPreset);
