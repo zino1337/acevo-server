@@ -16,7 +16,7 @@ Full README: https://github.com/zino1337/acevo-server
 
 ## Features
 
-- Web dashboard to configure and control the server from the browser
+- Web dashboard to configure and control the server, including a live driver overview
 - Environment variables or server_launcher.json for easy server configuration
 - SteamCMD auto-update
 - Practice and Race Weekend support
