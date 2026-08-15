@@ -84,10 +84,16 @@ body {
   height: 100%;
 }
 
+html {
+  scrollbar-gutter: stable;
+}
+
 body {
   font-family: "Roboto", "Segoe UI", system-ui, sans-serif;
   background: var(--md-sys-color-background);
   color: var(--md-sys-color-on-surface);
+  padding-right: env(safe-area-inset-right);
+  padding-left: env(safe-area-inset-left);
 }
 
 /* Top app bar */
@@ -119,7 +125,14 @@ body {
   display: flex;
   align-items: center;
   gap: 8px;
-  flex-wrap: wrap;
+}
+
+.primary-controls,
+.topbar-statuses {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: nowrap;
 }
 
 .theme-toggle {
@@ -136,7 +149,7 @@ body {
 }
 
 .tabbar md-tabs {
-  max-width: 360px;
+  max-width: 620px;
 }
 
 /* Status chip */
@@ -171,13 +184,88 @@ body {
   background: #ed6c02;
 }
 
+.config-priority {
+  appearance: none;
+  border: 1px solid var(--md-sys-color-outline-variant);
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 34px;
+  padding: 0 12px;
+  border-radius: 999px;
+  background: var(--md-sys-color-surface-container-highest);
+  white-space: nowrap;
+  color: var(--md-sys-color-on-surface);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 500;
+}
+
+.config-priority:hover {
+  background: var(--md-sys-color-surface-container-high);
+}
+
+.config-priority:focus-visible {
+  outline: 2px solid var(--md-sys-color-primary);
+  outline-offset: 2px;
+}
+
+.config-priority:disabled {
+  cursor: wait;
+  opacity: 0.7;
+}
+
+.config-priority-icon,
+.config-priority strong {
+  color: var(--md-sys-color-primary);
+  font-weight: 600;
+}
+
+.config-priority.warning {
+  color: var(--md-sys-color-error);
+}
+
+@media (max-width: 1100px) and (min-width: 601px) {
+  .topbar {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .topbar .spacer {
+    display: none;
+  }
+
+  .topbar .controls {
+    display: flex;
+    grid-column: 1 / -1;
+    justify-content: flex-end;
+    width: 100%;
+    gap: 8px;
+  }
+
+  .topbar-statuses {
+    justify-self: end;
+  }
+}
+
 /* Layout */
 .layout {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns:
+    minmax(280px, 0.85fr)
+    minmax(430px, 1.3fr)
+    minmax(280px, 0.85fr);
   gap: 16px;
   padding: 16px 20px 40px;
   align-items: start;
+}
+
+#col-server,
+#col-event,
+#col-sessions {
+  container-type: inline-size;
+  min-width: 0;
 }
 
 @media (max-width: 1100px) {
@@ -203,17 +291,172 @@ body {
 
 .field-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
+}
+
+.field-grid > * {
+  min-width: 0;
 }
 
 .field-grid .full {
   grid-column: 1 / -1;
 }
 
+@container (max-width: 480px) {
+  .field-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 md-outlined-text-field,
 md-outlined-select {
   width: 100%;
+}
+
+/* Live session */
+.live-view {
+  padding: 16px 20px 40px;
+}
+
+.live-summary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 180px));
+  gap: 12px;
+}
+
+.live-stat {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.live-stat span {
+  color: var(--md-sys-color-on-surface-variant);
+  font-size: 0.78rem;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.live-stat strong {
+  color: var(--md-sys-color-primary);
+  font-family: "Roboto Mono", ui-monospace, monospace;
+  font-size: 1.4rem;
+}
+
+.live-panel {
+  margin: 0;
+}
+
+.live-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.live-header h2 {
+  margin: 0;
+}
+
+.live-updated,
+.live-message {
+  color: var(--md-sys-color-on-surface-variant);
+  font-size: 0.82rem;
+}
+
+.live-message {
+  padding: 28px 12px;
+  text-align: center;
+}
+
+.live-message.error {
+  background: var(--md-sys-color-error-container);
+  border-radius: 12px;
+  color: var(--md-sys-color-on-error-container);
+}
+
+.live-drivers {
+  overflow: hidden;
+  border: 1px solid var(--md-sys-color-outline-variant);
+  border-radius: 12px;
+}
+
+.live-driver-row {
+  display: grid;
+  grid-template-columns: 48px minmax(130px, 1.3fr) minmax(180px, 2fr) 64px 104px 104px;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--md-sys-color-outline-variant);
+}
+
+#live-driver-rows .live-driver-row:last-child {
+  border-bottom: 0;
+}
+
+.live-driver-head {
+  background: var(--md-sys-color-surface-container);
+  color: var(--md-sys-color-on-surface-variant);
+  font-size: 0.72rem;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.live-driver-head span:nth-child(n + 4) {
+  text-align: right;
+}
+
+.live-driver-name,
+.live-car {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.live-driver-name {
+  font-weight: 500;
+}
+
+.live-car {
+  color: var(--md-sys-color-on-surface-variant);
+  font-size: 0.82rem;
+}
+
+.live-number,
+.live-laps,
+.live-best,
+.live-last {
+  font-variant-numeric: tabular-nums;
+  font-family: "Roboto Mono", ui-monospace, monospace;
+  font-size: 0.82rem;
+}
+
+.live-laps,
+.live-best,
+.live-last {
+  text-align: right;
+}
+
+.live-mobile-label {
+  display: none;
+}
+
+.live-delta {
+  display: block;
+  color: var(--md-sys-color-on-surface-variant);
+  font-size: 0.7rem;
+}
+
+.live-fastest {
+  color: var(--md-sys-color-primary);
+  font-weight: 500;
 }
 
 /* Configuration profiles tab */
@@ -291,6 +534,238 @@ md-outlined-select {
   color: var(--md-sys-color-on-surface-variant);
 }
 
+/* Mods */
+.mods-view {
+  padding: 16px 20px 40px;
+}
+
+.mods-card {
+  max-width: 1080px;
+  margin: 0 auto;
+}
+
+.mods-help {
+  margin: 0 0 18px;
+  padding-left: 1.35rem;
+  color: var(--md-sys-color-on-surface-variant);
+  font-size: 0.86rem;
+  line-height: 1.55;
+}
+
+.mods-help li {
+  padding-left: 4px;
+}
+
+.mods-help li + li {
+  margin-top: 5px;
+}
+
+.mods-help code {
+  padding: 1px 3px;
+  border-radius: 4px;
+  background: var(--md-sys-color-surface-container);
+  color: inherit;
+  font-family: "Roboto Mono", ui-monospace, monospace;
+  font-size: 1em;
+  line-height: inherit;
+  overflow-wrap: anywhere;
+}
+
+.mods-table {
+  overflow: hidden;
+  border: 1px solid var(--md-sys-color-outline-variant);
+  border-radius: 12px;
+}
+
+.mods-row {
+  display: grid;
+  grid-template-columns: minmax(190px, 1.45fr) minmax(250px, 2fr) 72px 86px 94px 48px;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--md-sys-color-outline-variant);
+}
+
+.mods-head {
+  background: var(--md-sys-color-surface-container);
+  color: var(--md-sys-color-on-surface-variant);
+  font-size: 0.72rem;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+#mods-rows .mods-row:last-child {
+  border-bottom: 0;
+}
+
+.mod-file,
+.mod-cars,
+.mod-variants,
+.mod-size {
+  font-size: 0.85rem;
+}
+
+.mod-file,
+.mod-cars {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mod-size,
+.mods-summary,
+.mod-upload-label {
+  color: var(--md-sys-color-on-surface-variant);
+}
+
+.mods-summary,
+.mod-upload-label {
+  font-size: 0.78rem;
+}
+
+.mod-variants,
+.mod-size {
+  font-variant-numeric: tabular-nums;
+}
+
+.mod-variants {
+  font-family: "Roboto Mono", ui-monospace, monospace;
+}
+
+.mod-state {
+  display: flex;
+  align-items: center;
+}
+
+.mod-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.mod-status,
+.car-mod-badge {
+  display: inline-block;
+  border-radius: 999px;
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.mod-status {
+  padding: 5px 9px;
+}
+
+.mod-status.ready,
+.car-mod-badge {
+  background: var(--md-sys-color-secondary-container);
+  color: var(--md-sys-color-on-secondary-container);
+}
+
+.mod-status.invalid,
+.mod-status.conflict {
+  background: var(--md-sys-color-error-container);
+  color: var(--md-sys-color-on-error-container);
+}
+
+.car-mod-badge {
+  flex: 0 0 auto;
+  margin-left: 6px;
+  padding: 2px 6px;
+}
+
+.mods-empty {
+  padding: 18px;
+  color: var(--md-sys-color-on-surface-variant);
+  text-align: center;
+}
+
+.mods-summary {
+  margin: 8px 2px 0;
+}
+
+.mods-install {
+  margin-top: 20px;
+  padding-top: 18px;
+  border-top: 1px solid var(--md-sys-color-outline-variant);
+}
+
+.mods-install h3 {
+  margin: 0 0 10px;
+  font-size: 0.9rem;
+}
+
+.mods-upload-row {
+  display: flex;
+  align-items: stretch;
+  gap: 10px;
+}
+
+.mods-file-picker {
+  display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
+  align-items: center;
+  padding: 0 14px;
+  overflow: hidden;
+  border: 1px solid var(--md-sys-color-outline);
+  border-radius: 8px;
+  color: var(--md-sys-color-on-surface-variant);
+  cursor: pointer;
+  font-size: 0.85rem;
+}
+
+.mods-file-picker:focus-within {
+  border-color: var(--md-sys-color-primary);
+  outline: 1px solid var(--md-sys-color-primary);
+}
+
+.mods-file-picker:has(input:disabled) {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.mods-file-picker input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
+
+#mod-file-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mod-upload-progress {
+  height: 6px;
+  margin-top: 10px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--md-sys-color-surface-container-highest);
+}
+
+#mod-upload-progress-bar {
+  width: 0;
+  height: 100%;
+  background: var(--md-sys-color-primary);
+  transition: width 0.12s linear;
+}
+
+.mod-upload-label {
+  min-height: 18px;
+  margin-top: 4px;
+}
+
+.mod-upload-label.error {
+  color: var(--md-sys-color-error);
+}
+
 .switch-row {
   display: flex;
   align-items: center;
@@ -310,6 +785,7 @@ md-outlined-select {
 
 /* Cars */
 .cars-toolbar {
+  container-type: inline-size;
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -317,16 +793,42 @@ md-outlined-select {
 }
 
 .category-group {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px 14px;
+  display: grid;
+  grid-template-columns: repeat(7, max-content);
+  justify-content: space-between;
+  gap: 0 6px;
   font-size: 0.85rem;
 }
 
-.category-group .cat {
-  display: inline-flex;
-  align-items: center;
+.cars-category-filter {
+  display: grid;
   gap: 4px;
+}
+
+.cars-category-label {
+  color: var(--md-sys-color-on-surface-variant);
+  font-size: 0.75rem;
+}
+
+.category-group .cat {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+  min-height: 32px;
+}
+
+@container (max-width: 540px) {
+  .category-group {
+    grid-template-columns: repeat(5, max-content);
+  }
+}
+
+@container (max-width: 400px) {
+  .category-group {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
 }
 
 .cars-select-all {
@@ -351,9 +853,15 @@ md-outlined-select {
   padding: 4px 0;
 }
 
+.cars-filter-row .cat {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
 .cars-list-header {
   display: grid;
-  grid-template-columns: auto 1fr 72px 72px;
+  grid-template-columns: auto minmax(0, 1fr) 72px 72px;
   align-items: center;
   gap: 8px;
   padding: 8px 10px;
@@ -374,15 +882,33 @@ md-outlined-select {
 }
 
 .cars-list {
-  max-height: 460px;
+  height: 460px;
+  overflow-x: hidden;
   overflow-y: auto;
+  scrollbar-gutter: stable;
   border: 1px solid var(--md-sys-color-outline-variant);
   border-radius: 0 0 12px 12px;
 }
 
+.cars-empty {
+  display: grid;
+  min-height: 120px;
+  padding: 24px;
+  place-items: center;
+  color: var(--md-sys-color-on-surface-variant);
+  font-size: 0.85rem;
+  text-align: center;
+}
+
+@media (min-width: 1101px) {
+  .cars-list {
+    height: 540px;
+  }
+}
+
 .car-row {
   display: grid;
-  grid-template-columns: auto 1fr 72px 72px;
+  grid-template-columns: auto minmax(0, 1fr) 72px 72px;
   align-items: center;
   gap: 8px;
   padding: 8px 10px;
@@ -391,8 +917,22 @@ md-outlined-select {
 .car-row:last-child {
   border-bottom: none;
 }
+
+.car-info {
+  min-width: 0;
+  overflow: hidden;
+}
+
 .car-row .car-name {
+  display: flex;
+  min-width: 0;
+  align-items: center;
   font-size: 0.85rem;
+}
+
+.car-name-text {
+  min-width: 0;
+  flex: 1 1 auto;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -400,15 +940,24 @@ md-outlined-select {
 .car-row .car-pi {
   font-size: 0.72rem;
   color: var(--md-sys-color-on-surface-variant);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .car-row md-outlined-text-field {
   --md-outlined-text-field-top-space: 6px;
   --md-outlined-text-field-bottom-space: 6px;
+  min-width: 0;
+  width: 72px;
 }
 .cars-meta {
   font-size: 0.8rem;
   color: var(--md-sys-color-on-surface-variant);
   margin-top: 6px;
+}
+
+#config-path {
+  overflow-wrap: anywhere;
 }
 
 /* Preview / validation panel */
@@ -526,4 +1075,395 @@ md-outlined-select {
 
 .hidden {
   display: none !important;
+}
+
+.mobile-card-toggle {
+  all: unset;
+  box-sizing: border-box;
+  display: block;
+  width: 100%;
+  color: inherit;
+  cursor: default;
+  font: inherit;
+}
+
+.mobile-card-toggle:disabled {
+  color: inherit;
+}
+
+.mobile-card-toggle-icon {
+  display: none;
+}
+
+@media (max-width: 600px) {
+  body {
+    overflow-x: hidden;
+  }
+
+  .topbar {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 8px;
+    padding: calc(8px + env(safe-area-inset-top)) 10px 8px;
+  }
+
+  .topbar h1 {
+    font-size: 1rem;
+  }
+
+  .topbar .spacer {
+    display: none;
+  }
+
+  .topbar .controls {
+    display: block;
+    grid-column: 1 / -1;
+    width: 100%;
+  }
+
+  .primary-controls {
+    display: grid;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    gap: 4px;
+    width: 100%;
+  }
+
+  .topbar-statuses {
+    justify-self: end;
+    gap: 6px;
+  }
+
+  .status-chip {
+    justify-self: end;
+    padding: 5px 10px;
+  }
+
+  .primary-controls > * {
+    min-width: 0;
+    width: 100%;
+  }
+
+  .config-priority {
+    min-height: 30px;
+    padding: 0 10px;
+  }
+
+  .config-priority-icon,
+  .config-priority-prefix {
+    display: none;
+  }
+
+  #btn-start,
+  #btn-stop,
+  #btn-restart {
+    grid-column: span 2;
+  }
+
+  #btn-save {
+    grid-column: span 2;
+  }
+
+  #btn-save-apply {
+    grid-column: span 3;
+  }
+
+  .theme-toggle {
+    grid-column: span 1;
+    justify-content: center;
+  }
+
+  .theme-toggle md-icon {
+    display: none;
+  }
+
+  .tabbar,
+  .layout,
+  .mods-view,
+  .live-view,
+  .profiles-view,
+  .logs-view {
+    padding-left: 8px;
+    padding-right: 8px;
+  }
+
+  .tabbar md-tabs {
+    max-width: 100%;
+  }
+
+  .tabbar md-primary-tab {
+    min-width: 0;
+    flex: 1 1 0;
+  }
+
+  .layout {
+    gap: 8px;
+    padding-top: 8px;
+    padding-bottom: calc(40px + env(safe-area-inset-bottom));
+  }
+
+  .card {
+    min-width: 0;
+    padding: 14px 12px;
+    border-radius: 12px;
+    margin-bottom: 8px;
+  }
+
+  .mobile-collapsible > h2 {
+    margin-bottom: 10px;
+  }
+
+  .mobile-collapsible.mobile-collapsed > h2 {
+    margin-bottom: 0;
+  }
+
+  .mobile-card-toggle {
+    display: flex;
+    min-height: 32px;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+  }
+
+  .mobile-card-toggle:focus-visible {
+    border-radius: 6px;
+    outline: 2px solid var(--md-sys-color-primary);
+    outline-offset: 3px;
+  }
+
+  .mobile-card-toggle-icon {
+    display: inline-flex;
+    margin-left: auto;
+  }
+
+  .field-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .pi-row {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .cars-filter-row {
+    justify-content: flex-start;
+  }
+
+  .cars-list {
+    overflow-x: hidden;
+  }
+
+  .cars-list-header,
+  .car-row {
+    grid-template-columns: auto minmax(0, 1fr) 60px 60px;
+    gap: 4px;
+    padding-left: 6px;
+    padding-right: 6px;
+  }
+
+  .car-row > *,
+  .car-row md-outlined-text-field {
+    min-width: 0;
+    width: 100%;
+  }
+
+  .profiles-save-row,
+  .logs-header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .profiles-save-row #profile-name {
+    width: 100%;
+  }
+
+  .profile-row {
+    align-items: flex-start;
+    padding: 10px;
+  }
+
+  .mods-view {
+    padding-top: 8px;
+    padding-bottom: calc(40px + env(safe-area-inset-bottom));
+  }
+
+  .mods-head {
+    display: none;
+  }
+
+  .mods-row {
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    gap: 6px 10px;
+    padding: 10px;
+  }
+
+  .mod-file,
+  .mod-cars {
+    grid-column: 1 / 3;
+  }
+
+  .mod-cars {
+    color: var(--md-sys-color-on-surface-variant);
+  }
+
+  .mod-variants {
+    grid-column: 1;
+  }
+
+  .mod-size {
+    grid-column: 2;
+  }
+
+  .mod-variants::after {
+    content: " variants";
+    color: var(--md-sys-color-on-surface-variant);
+    font-family: "Roboto", "Segoe UI", system-ui, sans-serif;
+  }
+
+  .mod-state {
+    grid-column: 1 / 3;
+  }
+
+  .mod-actions {
+    grid-column: 3;
+    grid-row: 1 / 5;
+  }
+
+  .mods-upload-row {
+    flex-direction: column;
+  }
+
+  .mods-file-picker {
+    min-height: 48px;
+  }
+
+  .profile-actions,
+  .logs-actions {
+    flex-wrap: wrap;
+    justify-content: flex-start;
+  }
+
+  .logs-output {
+    min-height: 55vh;
+  }
+
+  .live-view,
+  .profiles-view,
+  .logs-view {
+    padding-bottom: calc(40px + env(safe-area-inset-bottom));
+  }
+
+  .live-view {
+    padding-top: 8px;
+  }
+
+  .live-summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .live-stat {
+    gap: 8px;
+  }
+
+  .live-header {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .live-driver-head {
+    display: none;
+  }
+
+  .live-driver-row {
+    grid-template-columns: 32px repeat(3, minmax(0, 1fr));
+    gap: 6px 8px;
+    padding: 10px;
+  }
+
+  .live-number {
+    grid-column: 1;
+    grid-row: 1 / 4;
+    align-self: stretch;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 8px;
+    background: var(--md-sys-color-surface-container);
+  }
+
+  .live-driver-name,
+  .live-car {
+    grid-column: 2 / 5;
+  }
+
+  .live-driver-name {
+    grid-row: 1;
+  }
+
+  .live-car {
+    grid-row: 2;
+  }
+
+  .live-laps,
+  .live-best,
+  .live-last {
+    grid-row: 3;
+    min-width: 0;
+    text-align: left;
+  }
+
+  .live-laps {
+    grid-column: 2;
+  }
+
+  .live-best {
+    grid-column: 3;
+  }
+
+  .live-last {
+    grid-column: 4;
+  }
+
+  .live-mobile-label {
+    display: block;
+    margin-bottom: 2px;
+    color: var(--md-sys-color-on-surface-variant);
+    font-family: "Roboto", "Segoe UI", system-ui, sans-serif;
+    font-size: 0.65rem;
+    font-weight: 500;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+  }
+}
+
+@media (max-width: 420px) {
+  .theme-toggle md-switch {
+    transform: scale(0.86);
+  }
+
+  .cars-list-header {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .cars-list-header-label {
+    display: none;
+  }
+
+  .car-row {
+    grid-template-columns: auto minmax(0, 1fr) minmax(0, 1fr);
+  }
+
+  .car-row > :nth-child(2) {
+    grid-column: 2 / 4;
+  }
+
+  .car-row > :nth-child(3) {
+    grid-column: 2;
+  }
+
+  .car-row > :nth-child(4) {
+    grid-column: 3;
+  }
 }

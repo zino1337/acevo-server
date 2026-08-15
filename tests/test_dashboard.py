@@ -12,7 +12,7 @@ import urllib.request
 from pathlib import Path
 from unittest.mock import patch
 
-from dashboard import app, config_io, metadata, server_control
+from dashboard import app, config_io, live, metadata, mods, server_control
 from scripts import launch_payloads
 
 FIXTURE = Path(__file__).parent / "fixtures" / "server_launcher_windows_sample.json"
@@ -47,6 +47,21 @@ class MetadataTests(unittest.TestCase):
         self.assertIn("|", track["token"])
         self.assertIn("(pit:", track["display"])
         self.assertIsInstance(track["max_pit_slot"], int)
+
+    def test_public_server_racing_classes(self):
+        cars = {car["display_name"]: car["classes"] for car in metadata.build_metadata()["cars"]}
+        expected_counts = {"f1": 2, "gt3": 6, "gt2": 5, "gt4": 3, "cup": 10}
+        for class_name, expected in expected_counts.items():
+            self.assertEqual(sum(class_name in classes for classes in cars.values()), expected, class_name)
+
+        self.assertIn("gt3", cars["Porsche 911 GT3 R Rennsport (992) - Unrestricted"])
+        self.assertNotIn("gt3", cars["Porsche 911 GT3 Cup (992) - ABS TC"])
+        self.assertNotIn("gt4", cars["Porsche 718 Cayman GT4 RS - Standard"])
+        self.assertIn("cup", cars["BMW M2 CS Racing - 350"])
+
+    def test_racing_class_filter_options(self):
+        options = metadata.build_metadata()["categories"]["class"]
+        self.assertEqual([option["value"] for option in options], ["f1", "gt3", "gt2", "gt4", "cup"])
 
 
 class RoundTripTests(unittest.TestCase):
@@ -195,6 +210,103 @@ class SaveLoadTests(unittest.TestCase):
 
     def test_load_saved_missing_file_returns_none(self):
         self.assertIsNone(config_io.load_saved(Path("does-not-exist-12345.json")))
+
+
+class ConfigSourceTests(unittest.TestCase):
+    def practice_form(self, server_name="Dashboard Server"):
+        form = config_io.launcher_to_form({})
+        form["server"]["server_name"] = server_name
+        form["event"]["type"] = "GameModeType_PRACTICE"
+        form["event"]["track"] = metadata.build_metadata()["tracks"]["practice"][0]["token"]
+        form["sessions"]["practice"]["length_sec"] = 3600
+        cars = launch_payloads.load_config()["cars_data"]
+        form["cars"] = [{"name": cars[0]["internal_name"], "is_selected": True, "ballast": 0, "restrictor": 0}]
+        return form
+
+    def test_apply_activates_dashboard_and_switching_keeps_saved_config(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "server_launcher.json"
+            env = {"SERVER_NAME": "ENV Server"}
+            saved = config_io.save(self.practice_form(), path, env=env)
+            self.assertEqual(saved["config_source"], "env")
+            self.assertFalse(config_io.config_state_path(path).exists())
+
+            applied = config_io.apply(self.practice_form(), path, env=env)
+            self.assertTrue(applied["ok"])
+            self.assertEqual(applied["config_source"], "dashboard")
+            self.assertEqual(config_io.effective_runtime_form(path, env)["server"]["server_name"], "Dashboard Server")
+
+            env_result = config_io.set_config_source("env", path, env)
+            self.assertEqual(env_result["config_source"], "env")
+            self.assertEqual(config_io.effective_runtime_form(path, env)["server"]["server_name"], "ENV Server")
+            self.assertTrue(path.exists())
+
+            dashboard_result = config_io.set_config_source("dashboard", path, env)
+            self.assertEqual(dashboard_result["config_source"], "dashboard")
+            self.assertEqual(config_io.effective_runtime_form(path, env)["server"]["server_name"], "Dashboard Server")
+
+    def test_conflicts_are_semantic_and_exclude_inactive_sessions_and_secret_values(self):
+        form = self.practice_form()
+        cars = launch_payloads.load_config()["cars_data"]
+        env = {
+            "SERVER_NAME": "ENV Server",
+            "SERVER_ADMIN_PASSWORD": "do-not-return-this-secret",
+            "EVENT_TYPE": "Race_Weekend",
+            "EVENT_CARS": cars[1]["internal_name"],
+            "EVENT_CAR_CATEGORY": "all",
+            "PRACTICE_DURATION_MINUTES": "1",
+            "QUALIFY_DURATION_MINUTES": "1",
+        }
+        result = config_io.validate(form, env=env)
+
+        self.assertEqual(
+            result["env_conflicts"],
+            [
+                "SERVER_NAME",
+                "SERVER_ADMIN_PASSWORD",
+                "EVENT_TYPE",
+                "EVENT_CARS",
+                "EVENT_CAR_CATEGORY",
+                "PRACTICE_DURATION_MINUTES",
+            ],
+        )
+        self.assertNotIn("do-not-return-this-secret", json.dumps(result))
+        self.assertNotIn("launcher", result)
+
+    def test_equal_aliases_and_converted_duration_do_not_conflict(self):
+        form = self.practice_form()
+        selected = next(car["name"] for car in form["cars"] if car["is_selected"])
+        result = config_io.validate(
+            form,
+            env={
+                "SERVER_NAME": "Dashboard Server",
+                "EVENT_TYPE": "Practice",
+                "EVENT_CARS": selected,
+                "PRACTICE_DURATION_MINUTES": "60",
+            },
+        )
+        self.assertEqual(result["env_conflicts"], [])
+
+    def test_invalid_dashboard_state_falls_back_with_visible_warning(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "server_launcher.json"
+            path.write_text("{", encoding="utf-8")
+            config_io.config_state_path(path).write_text(json.dumps({"config_source": "dashboard"}), encoding="utf-8")
+            info = config_io.config_source_info(path, {"SERVER_NAME": "ENV Server"})
+
+        self.assertEqual(info["config_source"], "env")
+        self.assertFalse(info["dashboard_available"])
+        self.assertIn("missing or invalid", info["source_warning"])
+
+    def test_apply_restores_previous_file_when_priority_write_fails(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "server_launcher.json"
+            config_io.save(self.practice_form("Before"), path, env={})
+            before = path.read_bytes()
+            with patch.object(config_io, "set_config_source", return_value={"ok": False, "error": "state failed"}):
+                with self.assertRaisesRegex(OSError, "state failed"):
+                    config_io.apply(self.practice_form("After"), path, env={})
+            self.assertEqual(path.read_bytes(), before)
 
 
 class ProfilesTests(unittest.TestCase):
@@ -377,6 +489,14 @@ class ServerControlTests(unittest.TestCase):
         self.addCleanup(setattr, server_control, "_proc", None)
         self.addCleanup(setattr, server_control, "_last_exit", None)
         self.addCleanup(setattr, server_control, "_log_thread", None)
+        self.addCleanup(self._join_log_thread)
+        live.reset()
+        self.addCleanup(live.reset)
+
+    def _join_log_thread(self):
+        thread = server_control._log_thread
+        if thread is not None:
+            thread.join(timeout=1)
 
     def test_start_spawns_server_process(self):
         script = self.tmp / "run_server.sh"
@@ -385,6 +505,7 @@ class ServerControlTests(unittest.TestCase):
         with (
             patch.object(server_control, "RUN_SERVER_SCRIPT", script),
             patch.object(server_control.subprocess, "Popen", return_value=fake) as popen,
+            patch.object(live, "reset") as reset_live,
         ):
             result = server_control.start()
         self.assertTrue(result["ok"])
@@ -395,6 +516,7 @@ class ServerControlTests(unittest.TestCase):
         self.assertEqual(kwargs["stdout"], subprocess.PIPE)
         self.assertEqual(kwargs["stderr"], subprocess.STDOUT)
         self.assertTrue(kwargs["start_new_session"])
+        reset_live.assert_called_once_with()
 
     def test_start_missing_script_errors(self):
         with patch.object(server_control, "RUN_SERVER_SCRIPT", self.tmp / "nope.sh"):
@@ -420,12 +542,42 @@ class ServerControlTests(unittest.TestCase):
     def test_stop_signals_process_group(self):
         # running for the initial check, then reported finished so the wait loop exits promptly
         server_control._proc = FakeProc(pid=4242, poll_result=0, alive_polls=1)
-        with patch.object(server_control.os, "killpg", create=True) as killpg:
+        with (
+            patch.object(server_control.os, "killpg", create=True) as killpg,
+            patch.object(server_control, "_wait_process_group_exit") as wait_group,
+            patch.object(live, "reset") as reset_live,
+        ):
             result = server_control.stop()
         self.assertFalse(result["running"])
         killpg.assert_called()
         self.assertEqual(killpg.call_args_list[0][0][1], server_control.signal.SIGTERM)
+        wait_group.assert_called_once_with(4242)
         self.assertIsNone(server_control._proc)
+        reset_live.assert_called_once_with()
+
+    def test_restart_allows_runtime_to_settle_before_start(self):
+        order = []
+        with (
+            patch.object(server_control, "stop", side_effect=lambda: order.append("stop")),
+            patch.object(server_control.time, "sleep", side_effect=lambda _seconds: order.append("settle")),
+            patch.object(
+                server_control,
+                "start",
+                side_effect=lambda: order.append("start") or {"ok": True, "running": True},
+            ),
+        ):
+            result = server_control.restart()
+        self.assertTrue(result["running"])
+        self.assertEqual(order, ["stop", "settle", "start"])
+
+    def test_lingering_process_group_is_killed_before_restart(self):
+        with (
+            patch.object(server_control, "_process_group_exists", side_effect=[True, True, False]),
+            patch.object(server_control.time, "monotonic", side_effect=[0.0, 6.0, 6.0]),
+            patch.object(server_control, "_signal_group") as signal_group,
+        ):
+            server_control._wait_process_group_exit(4242)
+        signal_group.assert_called_once_with(4242, server_control._KILL_SIGNAL)
 
     def test_logs_returns_tail(self):
         log = self.tmp / "logs" / "server.log"
@@ -436,7 +588,8 @@ class ServerControlTests(unittest.TestCase):
         self.assertEqual(out["lines"], "line2\nline3")
 
     def test_tee_output_writes_log_file_and_stdout(self):
-        proc = FakeProc(stdout=io.BytesIO(b"line1\nline2\n"))
+        output = b"connecting gamecar 47efe85b7c69e844-6d27cbdfe96760ab (Max Bearman | 76561198200085390)\nline2\n"
+        proc = FakeProc(stdout=io.BytesIO(output))
         captured = io.BytesIO()
 
         class Stdout:
@@ -446,8 +599,9 @@ class ServerControlTests(unittest.TestCase):
         with patch.object(server_control.sys, "stdout", Stdout()):
             server_control._tee_output(proc, server_control.LOG_FILE)
 
-        self.assertEqual(server_control.LOG_FILE.read_bytes(), b"line1\nline2\n")
-        self.assertEqual(captured.getvalue(), b"line1\nline2\n")
+        self.assertEqual(server_control.LOG_FILE.read_bytes(), output)
+        self.assertEqual(captured.getvalue(), output)
+        self.assertEqual(live.snapshot()["drivers"][0]["name"], "Max Bearman")
 
 
 class BasicAuthTests(unittest.TestCase):
@@ -472,11 +626,149 @@ class BasicAuthTests(unittest.TestCase):
 
 
 class FrontendStaticTests(unittest.TestCase):
+    def test_configuration_priority_flow_is_explicit_and_preflights_apply(self):
+        static = Path(__file__).parents[1] / "dashboard" / "static"
+        html = (static / "index.html").read_text(encoding="utf-8")
+        source = (static / "app.js").read_text(encoding="utf-8")
+        self.assertIn('id="config-priority"', html)
+        self.assertIn('id="config-priority-value"', html)
+        self.assertIn('class="topbar-statuses"', html)
+        self.assertNotIn('id="config-priority-switch"', html)
+        self.assertNotIn('id="config-priority"', html.split('<main id="config-view"', 1)[1])
+        self.assertIn('configSource === "dashboard" ? "env" : "dashboard"', source)
+        self.assertIn('byId("config-priority").addEventListener("click", switchConfigSource)', source)
+        self.assertIn("Use ENV priority", source)
+        self.assertIn('api.post("/api/validate", { form })', source)
+        self.assertIn('api.post("/api/server/apply", { form })', source)
+        self.assertNotIn("const saved = await doSave();", source)
+
     def test_cars_bulk_selection_uses_master_checkbox_only(self):
         source = (Path(__file__).parents[1] / "dashboard" / "static" / "app.js").read_text(encoding="utf-8")
-        self.assertIn("All visible cars", source)
+        self.assertIn("Select all shown", source)
+        self.assertIn("Categories · hiding clears selection", source)
         self.assertIn("cars-list-header", source)
+        self.assertIn("name.title = car.display_name", source)
+        self.assertIn('nameWrap.className = "car-info"', source)
+        self.assertIn('nameText.className = "car-name-text"', source)
+        self.assertIn("No selected cars match the current filters.", source)
+        self.assertIn("No cars match this search.", source)
+        self.assertIn("carPerformanceLabel(car, META.categories)", source)
+        self.assertIn("if (carFilters.onlySelected && !cb.checked) renderCarList();", source)
         self.assertNotIn("Select none", source)
+
+    def test_class_filters_and_track_memory_are_wired(self):
+        source = (Path(__file__).parents[1] / "dashboard" / "static" / "app.js").read_text(encoding="utf-8")
+        self.assertIn("classes: new Set()", source)
+        self.assertIn("META.categories.class", source)
+        self.assertIn("lastTrackPerMode", source)
+        self.assertIn("preferredTrack", source)
+        self.assertIn("categoryFilterDefaults(META.categories, META.cars)", source)
+        self.assertNotIn("applyCategorySelection", source)
+        self.assertNotIn("selectedByCategoryFilters", source)
+        self.assertIn("deselectCarsInCategory(META.cars, carState, kind, opt.value)", source)
+        self.assertIn('deselectCarsInCategory(META.cars, carState, "mod", "mod")', source)
+        self.assertIn("setVisibleCarSelection(shown, carState, value)", source)
+        self.assertIn('const CAR_WORKSPACE_STORAGE_KEY = "acevo-car-workspace"', source)
+        self.assertIn("sessionStorage.setItem(", source)
+        self.assertIn("restoreCarWorkspace(activeConfigPath)", source)
+        self.assertIn('"Categories · search covers all cars"', source)
+        self.assertIn("if (searchActive()) return matchesCarSearch(car, carFilters.text);", source)
+        self.assertIn("const categoriesChanged = cb.checked && ensureCarCategoryVisible(car);", source)
+        self.assertIn('span.textContent = "Mod"', source)
+        self.assertIn("sortCarsByDisplayName", source)
+        self.assertNotIn("SESSION_PRESETS", source)
+
+    def test_car_filter_layout_has_stable_dimensions(self):
+        source = (Path(__file__).parents[1] / "dashboard" / "static" / "theme.css").read_text(encoding="utf-8")
+        self.assertIn("grid-template-columns: repeat(3, minmax(0, 1fr))", source)
+        self.assertIn("grid-template-columns: repeat(7, max-content)", source)
+        self.assertIn("@container (max-width: 540px)", source)
+        self.assertNotIn(".category-column", source)
+        self.assertNotIn(".category-title", source)
+        self.assertIn("scrollbar-gutter: stable", source)
+        self.assertIn("grid-template-columns: auto minmax(0, 1fr) 72px 72px", source)
+        self.assertIn("overflow-x: hidden", source)
+        self.assertIn("height: 460px", source)
+        self.assertIn(".car-name-text", source)
+        self.assertIn("flex: 1 1 auto", source)
+        self.assertIn(".car-mod-badge", source)
+        self.assertIn("flex: 0 0 auto", source)
+
+    def test_mobile_dashboard_breakpoint_exists(self):
+        static = Path(__file__).parents[1] / "dashboard" / "static"
+        css = (static / "theme.css").read_text(encoding="utf-8")
+        html = (static / "index.html").read_text(encoding="utf-8")
+        app_js = (static / "app.js").read_text(encoding="utf-8")
+
+        self.assertIn("@media (max-width: 600px)", css)
+        self.assertIn("@media (max-width: 420px)", css)
+        self.assertIn("grid-template-columns: auto minmax(0, 1fr) 60px 60px", css)
+        self.assertIn("grid-template-columns: repeat(6, minmax(0, 1fr))", css)
+        self.assertIn("safe-area-inset-top", css)
+        self.assertIn("mobile-card-toggle", css)
+        self.assertEqual(html.count('data-mobile-section="'), 5)
+        self.assertIn("card.dataset.mobileSection = `session-${key}`", app_js)
+        self.assertIn("acevo-mobile-sections", app_js)
+        self.assertNotIn("dirty-change-bar", html)
+
+    def test_live_tab_polls_only_while_active(self):
+        static = Path(__file__).parents[1] / "dashboard" / "static"
+        css = (static / "theme.css").read_text(encoding="utf-8")
+        html = (static / "index.html").read_text(encoding="utf-8")
+        app_js = (static / "app.js").read_text(encoding="utf-8")
+
+        self.assertIn('id="tab-live"', html)
+        self.assertIn('id="live-view"', html)
+        self.assertIn("/api/server/live", app_js)
+        self.assertIn("liveTimer = setInterval(refreshLive, 4000)", app_js)
+        self.assertIn('if (view === "live") startLivePolling()', app_js)
+        self.assertIn("else stopLivePolling()", app_js)
+        self.assertIn(".live-driver-row", css)
+        self.assertIn("grid-template-columns: 32px repeat(3, minmax(0, 1fr))", css)
+        self.assertIn("liveCarDisplayName", app_js)
+        self.assertIn(".live-driver-head span:nth-child(n + 4)", css)
+        self.assertIn("font-variant-numeric: tabular-nums", css)
+
+    def test_mods_tab_is_kspkg_only_and_contains_client_instructions(self):
+        static = Path(__file__).parents[1] / "dashboard" / "static"
+        css = (static / "theme.css").read_text(encoding="utf-8")
+        html = (static / "index.html").read_text(encoding="utf-8")
+        app_js = (static / "app.js").read_text(encoding="utf-8")
+        dashboard_logic = (static / "dashboard_logic.mjs").read_text(encoding="utf-8")
+
+        self.assertIn('id="tab-mods"', html)
+        self.assertIn('id="mods-view"', html)
+        self.assertIn('<ol class="mods-help">', html)
+        self.assertIn('accept=".kspkg"', html)
+        self.assertIn("<span>Size</span>", html)
+        self.assertIn("asks before stopping it", html)
+        self.assertIn("The car and its variants are", html)
+        self.assertIn("open the Configuration tab", html)
+        self.assertIn("<h2>Cars</h2>", html)
+        self.assertNotIn("Car Restrictions", html)
+        self.assertIn("As a client, every driver", html)
+        self.assertIn(r"%USERPROFILE%\Saved Games\ACE\mods", html)
+        self.assertNotIn('accept=".json"', html)
+        self.assertNotIn("quota", html.lower())
+        self.assertIn('fetch("/api/mods/upload/start"', app_js)
+        self.assertIn("/api/mods/upload/chunk?upload_id=", app_js)
+        self.assertIn("/api/mods/upload/status?upload_id=", app_js)
+        self.assertIn('request.upload.addEventListener("progress"', app_js)
+        self.assertIn("Resuming upload at", app_js)
+        self.assertIn("The web proxy rejected the upload chunk", dashboard_logic)
+        self.assertIn(".mod-upload-label.error", css)
+        self.assertIn("removed from the active configuration automatically", app_js)
+        self.assertIn("async function modServerIsRunning()", app_js)
+        self.assertIn("async function stopServerForModChange()", app_js)
+        self.assertIn('result = await api.post("/api/server/stop")', app_js)
+        self.assertIn("Stop server and install mod", app_js)
+        self.assertIn("Stop server and delete mod", app_js)
+        self.assertIn("input.disabled = modMutationActive", app_js)
+        self.assertIn("deleteButton.disabled = modMutationActive", app_js)
+        self.assertIn("matchesPiFilter", app_js)
+        self.assertIn(".mods-row", css)
+        self.assertIn("@media (min-width: 1101px)", css)
+        self.assertIn("height: 540px", css)
 
 
 class HttpIntegrationTests(unittest.TestCase):
@@ -493,6 +785,19 @@ class HttpIntegrationTests(unittest.TestCase):
             token = base64.b64encode(auth.encode()).decode()
             req.add_header("Authorization", f"Basic {token}")
         return urllib.request.urlopen(req, timeout=5)
+
+    def post(self, port, path, body, auth=None):
+        headers = {"Content-Type": "application/json"}
+        if auth:
+            token = base64.b64encode(auth.encode()).decode()
+            headers["Authorization"] = f"Basic {token}"
+        request = urllib.request.Request(
+            f"http://127.0.0.1:{port}{path}",
+            data=json.dumps(body).encode(),
+            headers=headers,
+            method="POST",
+        )
+        return urllib.request.urlopen(request, timeout=5)
 
     def test_requires_auth_when_password_set(self):
         httpd, port = self.make("s3cret")
@@ -516,6 +821,142 @@ class HttpIntegrationTests(unittest.TestCase):
         try:
             with self.get(port, "/api/metadata") as resp:
                 self.assertEqual(resp.status, 200)
+        finally:
+            httpd.shutdown()
+            httpd.server_close()
+
+    def test_mod_routes_list_volume_and_reject_invalid_upload(self):
+        with tempfile.TemporaryDirectory() as temp:
+            mods_dir = Path(temp) / "mods"
+            mods_dir.mkdir()
+            (mods_dir / "companion.json").write_text('{"ignored": true}', encoding="utf-8")
+            httpd, port = self.make("")
+            try:
+                with (
+                    patch.dict(os.environ, {"ACEVO_MODS_DIR": str(mods_dir)}, clear=False),
+                    patch.object(server_control, "status", return_value={"running": False, "state": "stopped"}),
+                ):
+                    with self.get(port, "/api/mods") as response:
+                        body = json.loads(response.read())
+                    self.assertEqual(body["mods"], [])
+                    self.assertFalse(body["running"])
+
+                    request = urllib.request.Request(
+                        f"http://127.0.0.1:{port}/api/mods/upload?filename=broken.kspkg",
+                        data=b"not a package",
+                        headers={"Content-Type": "application/octet-stream"},
+                        method="POST",
+                    )
+                    with self.assertRaises(urllib.error.HTTPError) as ctx:
+                        urllib.request.urlopen(request, timeout=5)
+                    self.assertEqual(ctx.exception.code, 400)
+                    error = json.loads(ctx.exception.read())
+                    self.assertIn("file table", error["error"])
+                    ctx.exception.close()
+            finally:
+                httpd.shutdown()
+                httpd.server_close()
+
+            self.assertEqual([path.name for path in mods_dir.iterdir()], ["companion.json"])
+
+    def test_chunk_upload_routes_report_offset_and_resume_session(self):
+        with tempfile.TemporaryDirectory() as temp:
+            mods_dir = Path(temp) / "mods"
+            mods_dir.mkdir()
+            httpd, port = self.make("")
+            payload = b"not a package"
+            try:
+                with (
+                    patch.dict(os.environ, {"ACEVO_MODS_DIR": str(mods_dir)}, clear=False),
+                    patch.object(server_control, "status", return_value={"running": False, "state": "stopped"}),
+                ):
+                    start_body = json.dumps(
+                        {"filename": "resume.kspkg", "size": len(payload), "last_modified": 123}
+                    ).encode()
+                    start_request = urllib.request.Request(
+                        f"http://127.0.0.1:{port}/api/mods/upload/start",
+                        data=start_body,
+                        headers={"Content-Type": "application/json"},
+                        method="POST",
+                    )
+                    with urllib.request.urlopen(start_request, timeout=5) as response:
+                        started = json.loads(response.read())
+                    self.assertEqual(started["offset"], 0)
+                    self.assertEqual(started["chunk_size"], mods.MAX_UPLOAD_CHUNK_SIZE)
+
+                    first_request = urllib.request.Request(
+                        f"http://127.0.0.1:{port}/api/mods/upload/chunk?upload_id={started['upload_id']}&offset=0",
+                        data=payload[:4],
+                        headers={"Content-Type": "application/octet-stream"},
+                        method="POST",
+                    )
+                    with urllib.request.urlopen(first_request, timeout=5) as response:
+                        first = json.loads(response.read())
+                    self.assertEqual(first["offset"], 4)
+                    self.assertFalse(first["complete"])
+
+                    with self.get(
+                        port,
+                        f"/api/mods/upload/status?upload_id={started['upload_id']}",
+                    ) as response:
+                        status = json.loads(response.read())
+                    self.assertEqual(status["offset"], 4)
+
+                    with urllib.request.urlopen(start_request, timeout=5) as response:
+                        resumed = json.loads(response.read())
+                    self.assertEqual(resumed["upload_id"], started["upload_id"])
+                    self.assertEqual(resumed["offset"], 4)
+
+                    final_request = urllib.request.Request(
+                        f"http://127.0.0.1:{port}/api/mods/upload/chunk?upload_id={started['upload_id']}&offset=4",
+                        data=payload[4:],
+                        headers={"Content-Type": "application/octet-stream"},
+                        method="POST",
+                    )
+                    with self.assertRaises(urllib.error.HTTPError) as ctx:
+                        urllib.request.urlopen(final_request, timeout=5)
+                    self.assertEqual(ctx.exception.code, 400)
+                    self.assertIn("invalid KSPKG", json.loads(ctx.exception.read())["error"])
+                    ctx.exception.close()
+            finally:
+                httpd.shutdown()
+                httpd.server_close()
+
+            self.assertFalse((mods_dir / "resume.kspkg").exists())
+            self.assertEqual(list((mods_dir / mods.UPLOADS_DIRNAME).iterdir()), [])
+
+    def test_live_route_is_authenticated_and_omits_private_data(self):
+        httpd, port = self.make("s3cret")
+        snapshot = {
+            "players": 1,
+            "drivers": [
+                {
+                    "car_id": "runtime-id",
+                    "name": "Driver",
+                    "car": "preset_m4gt3_mech_1",
+                    "number": 20,
+                    "laps": 3,
+                    "last_lap_ms": 98321,
+                    "best_lap_ms": 97210,
+                }
+            ],
+        }
+        try:
+            with self.assertRaises(urllib.error.HTTPError) as ctx:
+                self.get(port, "/api/server/live")
+            self.assertEqual(ctx.exception.code, 401)
+            ctx.exception.close()
+
+            with (
+                patch.object(server_control, "status", return_value={"running": True}),
+                patch.object(live, "snapshot", return_value=snapshot),
+            ):
+                with self.get(port, "/api/server/live", auth="admin:s3cret") as resp:
+                    body = json.loads(resp.read())
+            self.assertTrue(body["running"])
+            self.assertEqual(body["drivers"][0]["best_lap_ms"], 97210)
+            self.assertNotIn("steam_id", json.dumps(body))
+            self.assertNotIn("listing", body)
         finally:
             httpd.shutdown()
             httpd.server_close()
@@ -615,6 +1056,55 @@ class HttpIntegrationTests(unittest.TestCase):
         self.assertEqual(form["sessions"]["race"]["laps"], 8)
         selected = {car["name"] for car in form["cars"] if car["is_selected"]}
         self.assertEqual(selected, {selected_car})
+
+    def test_apply_and_source_routes_switch_priority_and_restart_only_when_running(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            config_path = Path(tmp) / "server_launcher.json"
+            form = ConfigSourceTests().practice_form()
+            httpd, port = self.make("", config_path=config_path)
+            try:
+                with (
+                    patch.dict(os.environ, {"SERVER_NAME": "ENV Server"}, clear=True),
+                    patch.object(server_control, "status", return_value={"running": False, "state": "stopped"}),
+                    patch.object(server_control, "restart") as restart,
+                ):
+                    with self.post(port, "/api/server/apply", {"form": form}) as response:
+                        applied = json.loads(response.read())
+                    self.assertTrue(applied["ok"])
+                    self.assertFalse(applied["restarted"])
+                    restart.assert_not_called()
+
+                with (
+                    patch.dict(os.environ, {"SERVER_NAME": "ENV Server"}, clear=True),
+                    patch.object(server_control, "status", return_value={"running": True, "state": "running"}),
+                    patch.object(server_control, "restart", return_value={"ok": True, "running": True}) as restart,
+                ):
+                    with self.post(port, "/api/config/source", {"source": "env"}) as response:
+                        switched = json.loads(response.read())
+                    self.assertEqual(switched["config_source"], "env")
+                    self.assertTrue(switched["restarted"])
+                    restart.assert_called_once_with()
+            finally:
+                httpd.shutdown()
+                httpd.server_close()
+
+    def test_apply_failure_does_not_restart_server(self):
+        httpd, port = self.make("")
+        try:
+            with (
+                patch.object(config_io, "apply", side_effect=OSError("write failed")),
+                patch.object(server_control, "status") as status,
+                patch.object(server_control, "restart") as restart,
+            ):
+                with self.assertRaises(urllib.error.HTTPError) as ctx:
+                    self.post(port, "/api/server/apply", {"form": {}})
+                self.assertEqual(ctx.exception.code, 500)
+                ctx.exception.close()
+                status.assert_not_called()
+                restart.assert_not_called()
+        finally:
+            httpd.shutdown()
+            httpd.server_close()
 
 
 if __name__ == "__main__":

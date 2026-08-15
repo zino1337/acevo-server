@@ -6,7 +6,7 @@ from the values the server pipeline actually accepts (car list, tracks, enum tok
 
 from __future__ import annotations
 
-from functools import lru_cache
+import re
 from pathlib import Path
 
 from scripts import launch_payloads as lp
@@ -27,6 +27,14 @@ _CATEGORY_LABELS = {
     "ice": "ICE",
     "ev": "EV",
     "hybrid": "Hybrid",
+}
+
+_RACING_CLASS_LABELS = {
+    "f1": "F1",
+    "gt3": "GT3",
+    "gt2": "GT2",
+    "gt4": "GT4",
+    "cup": "Cup / One-make",
 }
 
 # Enum option lists: (human label, key into the raw MAPPINGS dict). Values resolve to the exact
@@ -51,17 +59,43 @@ _ENUM_OPTIONS = {
 }
 
 
+def _racing_classes(car: dict) -> list[str]:
+    """Return useful public-server classes derived from official race-car variants."""
+    if car.get("property_1") != lp.CAR_TYPES_MAP["race"]:
+        return []
+
+    name = car["display_name"]
+    classes = []
+    if re.search(r"SF-25|F2004|Formula|\bF1\b", name):
+        classes.append("f1")
+    if re.search(r"\bGT3\b", name) and "GT3 Cup" not in name:
+        # Intentionally includes the Rennsport Unrestricted variant for public servers.
+        classes.append("gt3")
+    if re.search(r"\bGT2\b", name):
+        classes.append("gt2")
+    if re.search(r"\bGT4\b", name):
+        classes.append("gt4")
+    if re.search(r"Cup|Challenge|Trofeo|Academy|M2 CS Racing", name):
+        classes.append("cup")
+    return classes
+
+
 def _car_entry(car: dict) -> dict:
+    is_mod = bool(car.get("is_mod"))
     return {
         "internal_name": car["internal_name"],
         "display_name": car["display_name"],
-        "pi": car.get("performance_indicator", 0.0),
-        "type": _TYPE_LABELS.get(car.get("property_1"), "road"),
-        "era": _ERA_LABELS.get(car.get("property_2"), "modern"),
-        "engine": _ENGINE_LABELS.get(car.get("property_3"), "ice"),
-        "p1": car.get("property_1", 0),
-        "p2": car.get("property_2", 0),
-        "p3": car.get("property_3", 0),
+        "pi": None if is_mod else car.get("performance_indicator", 0.0),
+        "type": None if is_mod else _TYPE_LABELS.get(car.get("property_1"), "road"),
+        "era": None if is_mod else _ERA_LABELS.get(car.get("property_2"), "modern"),
+        "engine": None if is_mod else _ENGINE_LABELS.get(car.get("property_3"), "ice"),
+        "classes": _racing_classes(car),
+        "p1": 0 if is_mod else car.get("property_1", 0),
+        "p2": 0 if is_mod else car.get("property_2", 0),
+        "p3": 0 if is_mod else car.get("property_3", 0),
+        "is_mod": is_mod,
+        "mod_file": car.get("mod_file", ""),
+        "runtime_name": car.get("runtime_name", ""),
     }
 
 
@@ -108,6 +142,7 @@ def _categories() -> dict:
         "type": options(lp.CAR_TYPES_MAP),
         "era": options(lp.CAR_ERAS_MAP),
         "engine": options(lp.CAR_ENGINES_MAP),
+        "class": [{"value": name, "label": label} for name, label in _RACING_CLASS_LABELS.items()],
     }
 
 
@@ -166,9 +201,8 @@ def _defaults(cfg: dict) -> dict:
     }
 
 
-@lru_cache(maxsize=1)
 def build_metadata() -> dict:
-    """Return everything the frontend needs to render the form (cached for the process)."""
+    """Return everything the frontend needs, including the current mod directory."""
     cfg = lp.load_config()
     cars = [_car_entry(car) for car in cfg["cars_data"]]
     pis = [car["pi"] for car in cars if isinstance(car["pi"], (int, float))]

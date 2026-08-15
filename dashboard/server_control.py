@@ -17,11 +17,16 @@ import threading
 import time
 from pathlib import Path
 
+from . import live
+
 REPO_ROOT = Path(__file__).resolve().parent.parent
 RUN_SERVER_SCRIPT = Path(os.environ.get("ACEVO_RUN_SERVER", str(REPO_ROOT / "scripts" / "run_server.sh")))
 LOG_FILE = Path(os.environ.get("ACEVO_SERVER_LOG", "/data/logs/server.log"))
 _TERM_TIMEOUT = 15.0
+_GROUP_EXIT_TIMEOUT = 5.0
+_RESTART_SETTLE_SECONDS = 1.0
 _MAX_LOG_READ = 256 * 1024
+_KILL_SIGNAL = getattr(signal, "SIGKILL", signal.SIGTERM)
 
 _lock = threading.Lock()
 _proc: subprocess.Popen | None = None
@@ -39,7 +44,7 @@ def _write_stdout(data: bytes) -> None:
     sys.stdout.flush()
 
 
-def _tee_output(proc: subprocess.Popen, log_file: Path) -> None:
+def _tee_output(proc: subprocess.Popen, log_file: Path, generation: int | None = None) -> None:
     if proc.stdout is None:
         return
     try:
@@ -51,6 +56,10 @@ def _tee_output(proc: subprocess.Popen, log_file: Path) -> None:
                 if isinstance(chunk, str):
                     chunk = chunk.encode("utf-8", errors="replace")
                 log_fh.write(chunk)
+                try:
+                    live.consume_line(chunk, generation)
+                except Exception:  # noqa: BLE001 - live data must never affect the server process
+                    pass
                 _write_stdout(chunk)
     finally:
         try:
@@ -71,6 +80,7 @@ def _running_locked() -> bool:
         _log_thread.join(timeout=0.2)
         _log_thread = None
     _proc = None
+    live.reset()
     return False
 
 
@@ -84,6 +94,29 @@ def _signal_group(pid: int, sig: int) -> None:
             pass
 
 
+def _process_group_exists(pid: int) -> bool:
+    try:
+        os.killpg(pid, 0)
+        return True
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    except OSError:
+        return False
+
+
+def _wait_process_group_exit(pid: int) -> None:
+    deadline = time.monotonic() + _GROUP_EXIT_TIMEOUT
+    while _process_group_exists(pid) and time.monotonic() < deadline:
+        time.sleep(0.1)
+    if _process_group_exists(pid):
+        _signal_group(pid, _KILL_SIGNAL)
+        kill_deadline = time.monotonic() + 1.0
+        while _process_group_exists(pid) and time.monotonic() < kill_deadline:
+            time.sleep(0.05)
+
+
 def start() -> dict:
     with _lock:
         global _proc, _last_exit, _log_thread
@@ -95,6 +128,7 @@ def start() -> dict:
             LOG_FILE.parent.mkdir(parents=True, exist_ok=True)
             with open(LOG_FILE, "wb", buffering=0):
                 pass  # fresh log per server run
+            generation = live.reset()
         except OSError as exc:
             return {"ok": False, "error": f"cannot open log file {LOG_FILE}: {exc}"}
         try:
@@ -108,7 +142,7 @@ def start() -> dict:
             )
         except OSError as exc:
             return {"ok": False, "error": str(exc)}
-        _log_thread = threading.Thread(target=_tee_output, args=(_proc, LOG_FILE), daemon=True)
+        _log_thread = threading.Thread(target=_tee_output, args=(_proc, LOG_FILE, generation), daemon=True)
         _log_thread.start()
         _last_exit = None
         return {"ok": True, "running": True, "pid": _proc.pid}
@@ -118,6 +152,7 @@ def stop() -> dict:
     with _lock:
         global _proc, _last_exit, _log_thread
         if not _running_locked():
+            live.reset()
             return {"ok": True, "running": False, "message": "server not running"}
         pid = _proc.pid
         _signal_group(pid, signal.SIGTERM)
@@ -125,21 +160,24 @@ def stop() -> dict:
         while time.monotonic() < deadline and _proc.poll() is None:
             time.sleep(0.3)
         if _proc.poll() is None:
-            _signal_group(pid, signal.SIGKILL)
+            _signal_group(pid, _KILL_SIGNAL)
         try:
             _last_exit = _proc.wait(timeout=5)
         except subprocess.TimeoutExpired:
             _last_exit = None
+        _wait_process_group_exit(pid)
         if _log_thread is not None:
             _log_thread.join(timeout=2)
-            _log_thread = None
+        _log_thread = None
         _proc = None
+        live.reset()
         return {"ok": True, "running": False}
 
 
 def restart() -> dict:
     """Apply config: stop the server, then start it (regenerates payload from server_launcher.json)."""
     stop()
+    time.sleep(_RESTART_SETTLE_SECONDS)
     return start()
 
 

@@ -19,7 +19,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
 
-from . import config_io, metadata, server_control
+from . import config_io, live, metadata, mods, server_control
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 STATIC_DIR = Path(__file__).resolve().parent / "static"
@@ -147,7 +147,8 @@ class DashboardHandler(BaseHTTPRequestHandler):
                 return self._send_json(metadata.build_metadata())
             if route == "/api/config":
                 form = config_io.effective_runtime_form(self.config.config_path, os.environ)
-                return self._send_json({"config_path": str(self.config.config_path), "form": form})
+                source = config_io.config_source_info(self.config.config_path, os.environ)
+                return self._send_json({"config_path": str(self.config.config_path), "form": form, **source})
             if route == "/api/configs":
                 return self._send_json({"profiles": config_io.list_profiles(self.config.config_path)})
             if route == "/api/configs/get":
@@ -158,9 +159,22 @@ class DashboardHandler(BaseHTTPRequestHandler):
                 return self._send_json({"name": name, "form": form})
             if route == "/api/server/status":
                 return self._send_json(server_control.status())
+            if route == "/api/server/live":
+                current = server_control.status()
+                snapshot = live.snapshot() if current["running"] else {"players": 0, "drivers": []}
+                return self._send_json({"running": current["running"], **snapshot})
             if route == "/api/server/logs":
                 tail = int((parse_qs(parts.query).get("tail") or ["200"])[0] or 200)
                 return self._send_json(server_control.logs(tail=tail))
+            if route == "/api/mods/upload/status":
+                upload_id = (parse_qs(parts.query).get("upload_id") or [""])[0]
+                return self._send_json(mods.upload_status(upload_id))
+            if route == "/api/mods":
+                result = mods.inventory()
+                result["running"] = server_control.status()["running"]
+                return self._send_json(result)
+        except mods.ModError as exc:
+            return self._send_json({"error": str(exc)}, exc.status)
         except Exception as exc:  # noqa: BLE001 - surface any failure as JSON, never 500-crash the loop
             return self._send_json({"error": str(exc)}, 500)
         return self._send_json({"error": "not found"}, 404)
@@ -168,17 +182,98 @@ class DashboardHandler(BaseHTTPRequestHandler):
     def do_POST(self) -> None:
         if not self._authorized():
             return self._send_401()
-        route = urlsplit(self.path).path
+        parts = urlsplit(self.path)
+        route = parts.path
+        if route == "/api/mods/upload":
+            try:
+                length = int(self.headers.get("Content-Length") or 0)
+            except ValueError:
+                return self._send_json({"error": "invalid Content-Length"}, 400)
+            filename = (parse_qs(parts.query).get("filename") or [""])[0]
+            try:
+                return self._send_json(mods.upload(self.rfile, length, filename, config_path=self.config.config_path))
+            except mods.ModError as exc:
+                self.close_connection = True
+                return self._send_json({"error": str(exc)}, exc.status)
+            except Exception as exc:  # noqa: BLE001
+                self.close_connection = True
+                return self._send_json({"error": str(exc)}, 500)
+
+        if route == "/api/mods/upload/chunk":
+            try:
+                length = int(self.headers.get("Content-Length") or 0)
+            except ValueError:
+                return self._send_json({"error": "invalid Content-Length"}, 400)
+            query = parse_qs(parts.query)
+            upload_id = (query.get("upload_id") or [""])[0]
+            offset = (query.get("offset") or [""])[0]
+            try:
+                return self._send_json(
+                    mods.upload_chunk(
+                        self.rfile,
+                        length,
+                        upload_id,
+                        offset,
+                        self.config.config_path,
+                    )
+                )
+            except mods.ModError as exc:
+                self.close_connection = True
+                return self._send_json({"error": str(exc)}, exc.status)
+            except Exception as exc:  # noqa: BLE001
+                self.close_connection = True
+                return self._send_json({"error": str(exc)}, 500)
+
         body = self._read_json_body()
         if body is None:
             return self._send_json({"error": "invalid JSON body"}, 400)
         form = body.get("form", body) if isinstance(body, dict) else {}
         name = body.get("name") if isinstance(body, dict) else None
         try:
+            if route == "/api/mods/upload/start":
+                if not isinstance(body, dict):
+                    return self._send_json({"error": "JSON body must be an object"}, 400)
+                return self._send_json(
+                    mods.start_upload(
+                        body.get("filename"),
+                        body.get("size"),
+                        body.get("last_modified"),
+                        self.config.config_path,
+                    )
+                )
             if route == "/api/validate":
-                return self._send_json(config_io.validate(form))
+                return self._send_json(config_io.validate(form, env=os.environ))
             if route == "/api/save":
-                return self._send_json(config_io.save(form, self.config.config_path))
+                return self._send_json(config_io.save(form, self.config.config_path, env=os.environ))
+            if route == "/api/server/apply":
+                result = config_io.apply(form, self.config.config_path, env=os.environ)
+                current = server_control.status()
+                if current.get("running"):
+                    restart = server_control.restart()
+                    result["restarted"] = True
+                    result["server"] = restart
+                    if not restart.get("ok"):
+                        result["ok"] = False
+                        result["error"] = restart.get("error", "server restart failed")
+                else:
+                    result["restarted"] = False
+                return self._send_json(result)
+            if route == "/api/config/source":
+                source = body.get("source") if isinstance(body, dict) else None
+                result = config_io.set_config_source(source, self.config.config_path, os.environ)
+                if not result.get("ok"):
+                    return self._send_json(result, 400)
+                current = server_control.status()
+                if current.get("running"):
+                    restart = server_control.restart()
+                    result["restarted"] = True
+                    result["server"] = restart
+                    if not restart.get("ok"):
+                        result["ok"] = False
+                        result["error"] = restart.get("error", "server restart failed")
+                else:
+                    result["restarted"] = False
+                return self._send_json(result)
             if route == "/api/configs/save":
                 return self._send_json(config_io.save_profile(name, form, self.config.config_path))
             if route == "/api/configs/delete":
@@ -189,6 +284,10 @@ class DashboardHandler(BaseHTTPRequestHandler):
                 return self._send_json(server_control.stop())
             if route == "/api/server/restart":
                 return self._send_json(server_control.restart())
+            if route == "/api/mods/delete":
+                return self._send_json(mods.delete(name or body.get("filename"), self.config.config_path))
+        except mods.ModError as exc:
+            return self._send_json({"error": str(exc)}, exc.status)
         except Exception as exc:  # noqa: BLE001
             return self._send_json({"error": str(exc)}, 500)
         return self._send_json({"error": "not found"}, 404)

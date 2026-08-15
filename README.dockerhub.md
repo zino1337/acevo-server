@@ -16,7 +16,8 @@ Full README: https://github.com/zino1337/acevo-server
 
 ## Features
 
-- Web dashboard to configure and control the server from the browser
+- Web dashboard to configure and control the server, including a live driver overview
+- Mod support
 - Environment variables or server_launcher.json for easy server configuration
 - SteamCMD auto-update
 - Practice and Race Weekend support
@@ -55,10 +56,14 @@ The Steam volume keeps SteamCMD login state so Steam Guard is not required on ev
 | Volume / Path                | Description                                                                 |
 | ---------------------------- | --------------------------------------------------------------------------- |
 | `/data`                      | Persistent server data, saves, and generated config files                   |
+| `/data/mods`                 | Persistent `.kspkg` car mods                                                |
 | `/root/.local/share/Steam`   | SteamCMD cache and login state                                              |
 | `/data/server_launcher.json` | Optional official Windows launcher config loaded via `SERVER_LAUNCHER_JSON` |
 
-Environment variables override values from `server_launcher.json`.
+Environment variables have priority by default. **Save** alone does not change that priority. **Save & Apply** activates
+Dashboard priority, so saved `server_launcher.json` values override conflicting dashboard-managed variables. Operational
+settings such as Steam credentials, dashboard auth, update controls, and paths always remain ENV-based. When both sources
+exist, the header shows the active priority and lets you switch back without deleting either configuration.
 
 ## Ports
 
@@ -77,11 +82,30 @@ Open **`http://<host>:8090`** in a browser (change the port with `DASHBOARD_PORT
 
 From the dashboard you can:
 
-- Configure everything visually - server name, ports, passwords, cars, track, weather etc.
+- Configure server and event settings visually - server name, ports, passwords, cars, track, weather etc.
+- Install and remove `.kspkg` car mods from the **Mods** tab
 - Start/Stop/Restart the server
 - Watch live logs
 
 > **Windows:** start the stack with `docker compose -f docker-compose.winvol.yml up -d` instead.
+
+## Mod Support
+
+AC EVO supports modded cars in multiplayer. Every driver needs exactly the same mod file as the server; otherwise, AC
+EVO rejects the connection.
+
+1. Open **Mods**, upload a `.kspkg` file, and click **Install**. Car variants are detected automatically.
+2. Open the **Configuration** tab, select the newly added car, and click **Save & Apply**.
+3. Every driver must install the exact same `.kspkg` locally at `%USERPROFILE%\Saved Games\ACE\mods` before joining.
+
+If an upload is interrupted, select the same file again within 24 hours and click **Install** to resume it.
+
+Without the dashboard, stop the server and copy `.kspkg` files to `./volumes/data/mods` (`/data/mods` inside the
+container).
+
+Only `.kspkg` car mods are managed. Additional SDK JSON files are not required and remain untouched in the volume. Cars
+and variants are identified by their mechanical preset IDs inside the package; invalid packages and conflicting IDs
+are not added to the car selector. An explicit `EVENT_CARS=all` also includes all conflict-free installed mods.
 
 ## Docker Compose Examples
 
@@ -128,7 +152,7 @@ This section is shortened on Docker Hub. See the full table in the GitHub README
 | `RACE_DURATION_TYPE`                   | `Time`                         | Race duration mode: `Time` or `Laps`.              |
 | `RACE_MIN_WAITING_FOR_PLAYERS_SECONDS` | `10`                           | The minimum wait to start the race.                |
 | `RACE_MAX_WAITING_FOR_PLAYERS_SECONDS` | `60`                           | The maximum wait to start the race.                |
-| `AUTO_UPDATE`                          | `true`                         | Updates the dedicated server before startup.       |
+| `AUTO_UPDATE`                          | `true`                         | Container-start update; server restarts skip it.   |
 | `AUTO_START_SERVER`                    | `true`                         | Start the server automatically with the container. |
 | `ACEVO_FORCE_SOFTWARE_RENDERING`       | `true`                         | Enables default no-GPU host compatibility.         |
 | `DASHBOARD_PORT`                       | `8090`                         | Web dashboard port.                                |

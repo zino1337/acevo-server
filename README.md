@@ -7,7 +7,7 @@
 [![GitHub Repository](https://img.shields.io/badge/GitHub-Repository-181717?logo=github)](https://github.com/zino1337/acevo-server)
 
 <p align="center">
-  <img src="docs/dashboard.png" alt="AC EVO Server web dashboard — light and dark" width="960" />
+  <img src="docs/dashboard.png" alt="AC EVO Server web dashboard Configuration tab" width="960" />
 </p>
 
 Highly customizable Assetto Corsa Evo Dedicated Server running on Linux via Proton.<br/>
@@ -17,7 +17,8 @@ Not affiliated with Kunos Simulazioni or Assetto Corsa.
 
 ## Features
 
-- Web dashboard to configure and control the server from the browser
+- Web dashboard to configure and control the server, including a live driver overview
+- Mod support
 - Environment variables or server_launcher.json for easy server configuration
 - SteamCMD auto-update
 - Practice and Race Weekend support
@@ -56,10 +57,14 @@ The Steam volume keeps SteamCMD login state so Steam Guard is not required on ev
 | Volume / Path                | Description                                                                 |
 | ---------------------------- | --------------------------------------------------------------------------- |
 | `/data`                      | Persistent server data, saves, and generated config files                   |
+| `/data/mods`                 | Persistent `.kspkg` car mods (also available as `./volumes/data/mods`)      |
 | `/root/.local/share/Steam`   | SteamCMD cache and login state                                              |
 | `/data/server_launcher.json` | Optional official Windows launcher config loaded via `SERVER_LAUNCHER_JSON` |
 
-Environment variables override values from `server_launcher.json`.
+Environment variables have priority by default. **Save** alone does not change that priority. **Save & Apply** activates
+Dashboard priority, so saved `server_launcher.json` values override conflicting dashboard-managed variables. Operational
+settings such as Steam credentials, dashboard auth, update controls, and paths always remain ENV-based. When both sources
+exist, the header shows the active priority and lets you switch back without deleting either configuration.
 
 ## Ports
 
@@ -78,11 +83,30 @@ Just open **`http://<host>:8090`** in a browser (change the port with `DASHBOARD
 
 From the dashboard you can:
 
-- Configure everything visually — server name, ports, passwords, cars, track, weather etc.
+- Configure server and event settings visually — server name, ports, passwords, cars, track, weather etc.
+- Install and remove `.kspkg` car mods from the **Mods** tab
 - Start/Stop/Restart the server
 - Watch live logs
 
 > **Windows:** start the stack with `docker compose -f docker-compose.winvol.yml up -d` instead.
+
+## Mod Support
+
+AC EVO supports modded cars in multiplayer. Every driver needs exactly the same mod file as the server; otherwise, AC
+EVO rejects the connection.
+
+1. Open **Mods**, upload a `.kspkg` file, and click **Install**. Car variants are detected automatically.
+2. Open the **Configuration** tab, select the newly added car, and click **Save & Apply**.
+3. Every driver must install the exact same `.kspkg` locally at `%USERPROFILE%\Saved Games\ACE\mods` before joining.
+
+If an upload is interrupted, select the same file again within 24 hours and click **Install** to resume it.
+
+Without the dashboard, stop the server and copy `.kspkg` files to `./volumes/data/mods` (`/data/mods` inside the
+container).
+
+Only `.kspkg` car mods are managed. Additional SDK JSON files are not required and remain untouched in the volume. Cars
+and variants are identified by their mechanical preset IDs inside the package; invalid packages and conflicting IDs
+are not added to the car selector. An explicit `EVENT_CARS=all` also includes all conflict-free installed mods.
 
 ## Docker Compose Examples
 
@@ -102,13 +126,13 @@ Set or adjust in `.env` or in the docker compose file.
 | ------------------------------------------------ | ------------------------------ | ------- | -------------------------------------------------------------------------------------------------------------- |
 | `ACEVO_FORCE_SOFTWARE_RENDERING`                 | `true`                         | boolean | Forces Proton/WineD3D and Mesa llvmpipe software rendering for broad no-GPU host compatibility.                |
 | `AUTO_START_SERVER`                              | `true`                         | boolean | Start the AC EVO server automatically when the container starts (the dashboard can stop/restart it).           |
-| `AUTO_UPDATE`                                    | `true`                         | boolean | Updates the dedicated server before startup.                                                                   |
+| `AUTO_UPDATE`                                    | `true`                         | boolean | Updates the dedicated server once when the container starts; dashboard server restarts skip the update.        |
 | `DASHBOARD_PASSWORD`                             | empty                          | string  | Web dashboard Basic Auth password; empty disables auth (public). See the Web Dashboard section.                |
 | `DASHBOARD_PORT`                                 | `8090`                         | integer | Port the web dashboard listens on.                                                                             |
 | `DASHBOARD_USER`                                 | `admin`                        | string  | Web dashboard Basic Auth username.                                                                             |
 | `PGID`                                           | `0`                            | integer | Group ID used for mounted volume ownership.                                                                    |
 | `PUID`                                           | `0`                            | integer | User ID used for mounted volume ownership.                                                                     |
-| `SERVER_LAUNCHER_JSON`                           | `/data/server_launcher.json`   | path    | Optional official tool config loaded as base config when present; ENV values override it.                      |
+| `SERVER_LAUNCHER_JSON`                           | `/data/server_launcher.json`   | path    | Optional official tool config. ENV has priority by default; Dashboard **Save & Apply** can switch precedence.  |
 | `SERVER_ADMIN_PASSWORD`                          | empty                          | string  | Admin password.                                                                                                |
 | `SERVER_CYCLE_ENABLED`                           | `true`                         | boolean | Enables session/event cycling when supported by the server.                                                    |
 | `SERVER_DRIVER_PASSWORD`                         | empty                          | string  | Driver password.                                                                                               |

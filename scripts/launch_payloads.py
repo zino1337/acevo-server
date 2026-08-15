@@ -17,9 +17,22 @@ from dataclasses import dataclass, field
 from functools import lru_cache
 from pathlib import Path
 
+try:
+    from scripts import kspkg
+except ImportError:  # Direct ``python scripts/launch_payloads.py`` execution.
+    import kspkg
+
 TRUE_VALUES = {"1", "true", "yes", "y", "on"}
 FALSE_VALUES = {"0", "false", "no", "n", "off"}
 DEFAULT_SERVER_LAUNCHER_JSON = "/data/server_launcher.json"
+CONFIG_STATE_FILENAME = "dashboard_config_state.json"
+CONFIG_PRIORITIES = {"env", "dashboard"}
+CAR_FILTER_KEYS = {
+    "EVENT_CARS",
+    "EVENT_CAR_CATEGORY",
+    "EVENT_BAN_CARS",
+    "EVENT_BAN_CAR_CATEGORY",
+}
 SESSION_PREFIXES = ("PRACTICE", "QUALIFY", "WARMUP", "RACE")
 SESSION_NAMES = {
     "PRACTICE": "practice",
@@ -495,7 +508,26 @@ def map_launcher_sessions(launcher: LauncherImport, sessions: dict) -> None:
         launcher.duration_seconds[prefix] = length_int
 
 
-def load_server_launcher_json(env: dict[str, str], cfg: dict) -> LauncherImport:
+def config_state_path(env: dict[str, str]) -> Path:
+    launcher_path = Path(str(env.get("SERVER_LAUNCHER_JSON", "")).strip() or DEFAULT_SERVER_LAUNCHER_JSON)
+    return launcher_path.parent / CONFIG_STATE_FILENAME
+
+
+def requested_config_priority(env: dict[str, str]) -> tuple[str, str]:
+    state_path = config_state_path(env)
+    try:
+        state = _read_json(state_path)
+    except FileNotFoundError:
+        return "env", "no saved priority; using env"
+    except (OSError, ValueError) as exc:
+        return "env", f"invalid priority state {state_path}: {exc}; using env"
+    source = str(state.get("config_source", "")).strip().lower() if isinstance(state, dict) else ""
+    if source not in CONFIG_PRIORITIES:
+        return "env", f"invalid priority state {state_path}; using env"
+    return source, f"loaded from {state_path}"
+
+
+def load_server_launcher_json(env: dict[str, str], cfg: dict, priority: str = "env") -> LauncherImport:
     explicit_path = str(env.get("SERVER_LAUNCHER_JSON", "")).strip()
     path = Path(explicit_path or DEFAULT_SERVER_LAUNCHER_JSON)
     launcher = LauncherImport(path=str(path), source="env" if explicit_path else "default")
@@ -560,7 +592,7 @@ def load_server_launcher_json(env: dict[str, str], cfg: dict) -> LauncherImport:
         }
         for source_key, target_key in mapping.items():
             append_if_present(launcher.values, target_key, event, source_key)
-        if not any(key in env for key in ("EVENT_CARS", "EVENT_CAR_CATEGORY")):
+        if priority == "dashboard" or not any(key in env for key in ("EVENT_CARS", "EVENT_CAR_CATEGORY")):
             map_launcher_cars(launcher, cfg, event)
 
     sessions = document.get("Sessions")
@@ -569,8 +601,51 @@ def load_server_launcher_json(env: dict[str, str], cfg: dict) -> LauncherImport:
     return launcher
 
 
+def _normalize_cars(raw) -> list[dict]:
+    if isinstance(raw, dict):
+        raw = raw.get("cars", [])
+    if not isinstance(raw, list):
+        return []
+    cars: list[dict] = []
+    for item in raw:
+        if not isinstance(item, dict):
+            continue
+        internal_name = str(item.get("internal_name") or item.get("name") or "").strip()
+        if not internal_name:
+            continue
+        car = dict(item)
+        car["internal_name"] = internal_name
+        car["display_name"] = str(item.get("display_name") or internal_name)
+        car["is_mod"] = False
+        cars.append(car)
+    return cars
+
+
+def _official_cars(bundled: list[dict]) -> list[dict]:
+    merged = {car["internal_name"]: dict(car, is_mod=False) for car in bundled}
+    order = list(merged)
+    install_dir = Path(os.environ.get("ACEVO_SERVER_INSTALL_DIR", "/data/server"))
+    try:
+        installed = _normalize_cars(_read_json(install_dir / "cars.json"))
+    except Exception:
+        installed = []
+    for car in installed:
+        internal_name = car["internal_name"]
+        if internal_name not in merged:
+            order.append(internal_name)
+        merged[internal_name] = {**merged.get(internal_name, {}), **car, "is_mod": False}
+    try:
+        runtime_names = kspkg.runtime_names_by_preset(install_dir / "content.kspkg")
+    except (OSError, kspkg.KspkgError):
+        runtime_names = {}
+    for internal_name, runtime_name in runtime_names.items():
+        if internal_name in merged:
+            merged[internal_name]["runtime_name"] = runtime_name
+    return [merged[internal_name] for internal_name in order]
+
+
 @lru_cache(maxsize=1)
-def load_config() -> dict:
+def _load_static_config() -> dict:
     scripts_dir = Path(__file__).resolve().parent
     root = scripts_dir.parent / "config"
     runtime = RUNTIME_KEYS
@@ -579,12 +654,9 @@ def load_config() -> dict:
     defaults = _read_json(root / "defaults.json")
 
     try:
-        cars = _read_json(scripts_dir / "mappings" / "cars.json")
+        bundled_cars = _normalize_cars(_read_json(scripts_dir / "mappings" / "cars.json"))
     except Exception:
-        cars = []
-
-    car_lookup = {normalize_label(item["display_name"]): item["internal_name"] for item in cars}
-    cars_data = cars
+        bundled_cars = []
 
     tracks_by_event: dict[str, dict[str, dict]] = {"GameModeType_PRACTICE": {}, "GameModeType_RACE_WEEKEND": {}}
 
@@ -615,18 +687,51 @@ def load_config() -> dict:
         "session_defaults": session_defaults,
         "runtime": runtime,
         "mappings": mappings,
-        "car_lookup": car_lookup,
-        "cars_data": cars_data,
+        "bundled_cars_data": bundled_cars,
         "tracks_by_event": tracks_by_event,
         "supported_key_order": supported_key_order,
         "supported_keys": set(supported_key_order),
     }
 
 
+def load_config() -> dict:
+    """Load static mappings plus the current server and KSPKG car catalogs."""
+    cfg = dict(_load_static_config())
+    official_cars = _official_cars(cfg["bundled_cars_data"])
+    official_ids = {car["internal_name"] for car in official_cars}
+    mods_dir = Path(os.environ.get("ACEVO_MODS_DIR", "/data/mods"))
+    mod_inventory = kspkg.scan_mods(mods_dir, official_ids)
+    cars_data = [dict(car) for car in official_cars]
+    car_positions = {car["internal_name"]: index for index, car in enumerate(cars_data)}
+    for mod_car in kspkg.mod_car_entries(mod_inventory):
+        position = car_positions.get(mod_car["internal_name"])
+        if position is None:
+            car_positions[mod_car["internal_name"]] = len(cars_data)
+            cars_data.append(mod_car)
+        else:
+            cars_data[position] = mod_car
+    cfg.update(
+        {
+            "official_cars_data": official_cars,
+            "mod_inventory": mod_inventory,
+            "car_lookup": {normalize_label(item["display_name"]): item["internal_name"] for item in cars_data},
+            "cars_data": cars_data,
+        }
+    )
+    return cfg
+
+
 class EnvState:
-    def __init__(self, env: dict[str, str], launcher: LauncherImport, sensitive_keys: set[str]) -> None:
+    def __init__(
+        self,
+        env: dict[str, str],
+        launcher: LauncherImport,
+        sensitive_keys: set[str],
+        priority: str = "env",
+    ) -> None:
         self.env = env
         self.launcher = launcher
+        self.priority = priority
         self.json_values = launcher.values
         self.launcher_car_options = launcher.car_options
         self.launcher_duration_seconds = launcher.duration_seconds
@@ -643,6 +748,10 @@ class EnvState:
         self.resolved[key] = {"value": value, "source": source, "note": note}
 
     def source_for(self, key: str) -> str:
+        if self.priority == "dashboard" and self.launcher.loaded and key in CAR_FILTER_KEYS:
+            return "json" if key == "EVENT_CARS" and key in self.json_values else "default"
+        if self.priority == "dashboard" and key in self.json_values:
+            return "json"
         if key in self.env:
             return "env"
         if key in self.json_values:
@@ -653,9 +762,10 @@ class EnvState:
         return key in self.env or key in self.json_values
 
     def _raw(self, key: str) -> str:
-        if key in self.env:
+        source = self.source_for(key)
+        if source == "env":
             return str(self.env.get(key, ""))
-        if key in self.json_values:
+        if source == "json":
             return str(self.json_values.get(key, ""))
         return ""
 
@@ -786,6 +896,10 @@ def resolve_track(state: EnvState, cfg: dict, event_type: str) -> dict:
 
 def all_car_names(cfg: dict) -> list[str]:
     return [car["internal_name"] for car in cfg["cars_data"]]
+
+
+def default_car_names(cfg: dict) -> list[str]:
+    return [car["internal_name"] for car in cfg["cars_data"] if not car.get("is_mod")]
 
 
 def add_unique(target: list[str], seen: set[str], values: list[str]) -> None:
@@ -931,10 +1045,10 @@ def resolve_cars(state: EnvState, cfg: dict) -> list[str]:
     seen: set[str] = set()
 
     if not cars_raw and not category_raw:
-        selected = all_car_names(cfg)
+        selected = default_car_names(cfg)
         seen = set(selected)
-        state.set("EVENT_CARS", "all", "default")
-        state.set("EVENT_CAR_CATEGORY", "all", "default")
+        state.set("EVENT_CARS", "all", "default", "installed mods require explicit selection")
+        state.set("EVENT_CAR_CATEGORY", "all", "default", "installed mods require explicit selection")
     else:
         category_matches, invalid_categories = resolve_category_filter(state, cfg, "EVENT_CAR_CATEGORY", category_raw)
         add_unique(selected, seen, category_matches)
@@ -947,11 +1061,11 @@ def resolve_cars(state: EnvState, cfg: dict) -> list[str]:
             set_filter_state(state, "EVENT_CARS", cars_raw, invalid_cars)
 
         if not selected:
-            state.warn("EVENT_CARS / EVENT_CAR_CATEGORY: no valid cars found, using fallback 'all'.")
-            selected = all_car_names(cfg)
+            state.warn("EVENT_CARS / EVENT_CAR_CATEGORY: no valid cars found, using all official cars.")
+            selected = default_car_names(cfg)
             seen = set(selected)
-            state.set("EVENT_CARS", "all", "fallback", "fallback all selected")
-            state.set("EVENT_CAR_CATEGORY", "all", "fallback", "fallback all selected")
+            state.set("EVENT_CARS", "all", "fallback", "fallback all official cars")
+            state.set("EVENT_CAR_CATEGORY", "all", "fallback", "fallback all official cars")
 
     ban_matches: list[str] = []
     ban_seen: set[str] = set()
@@ -975,11 +1089,11 @@ def resolve_cars(state: EnvState, cfg: dict) -> list[str]:
 
     if not selected:
         state.warn(
-            "EVENT_BAN_CARS / EVENT_BAN_CAR_CATEGORY: ban filters removed all allowed cars, using fallback 'all'."
+            "EVENT_BAN_CARS / EVENT_BAN_CAR_CATEGORY: ban filters removed all allowed cars, using all official cars."
         )
-        selected = all_car_names(cfg)
-        state.set("EVENT_CARS", "all", "fallback", "fallback all selected after ban filters")
-        state.set("EVENT_CAR_CATEGORY", "all", "fallback", "fallback all selected after ban filters")
+        selected = default_car_names(cfg)
+        state.set("EVENT_CARS", "all", "fallback", "fallback all official cars after ban filters")
+        state.set("EVENT_CAR_CATEGORY", "all", "fallback", "fallback all official cars after ban filters")
 
     return selected
 
@@ -1012,7 +1126,11 @@ def resolve_sessions(state: EnvState, cfg: dict, event_type: str, race_duration_
                     session["DURATION_SECONDS"] = 0
                     state.set(key, value, "ignored_by_duration_type", "ignored because RACE_DURATION_TYPE=Laps")
                     continue
-                if field == "DURATION_MINUTES" and key not in state.env and prefix in state.launcher_duration_seconds:
+                if (
+                    field == "DURATION_MINUTES"
+                    and state.source_for(key) == "json"
+                    and prefix in state.launcher_duration_seconds
+                ):
                     seconds = state.launcher_duration_seconds[prefix]
                     minutes = seconds / 60
                     session[field] = minutes
@@ -1212,6 +1330,7 @@ def build_report(cfg: dict, state: EnvState, server_doc: dict, season_doc: dict)
     event = season_doc["event"]
 
     return {
+        "config_priority": state.priority,
         "resolved_env": resolved_env,
         "warnings": list(state.warnings),
         "server_summary": {
@@ -1237,10 +1356,21 @@ def build_report(cfg: dict, state: EnvState, server_doc: dict, season_doc: dict)
     }
 
 
-def build_documents_with_report(env: dict[str, str]) -> tuple[dict, dict, list[str], dict]:
+def build_documents_with_report(
+    env: dict[str, str], config_priority: str | None = None
+) -> tuple[dict, dict, list[str], dict]:
     cfg = load_config()
-    launcher = load_server_launcher_json(env, cfg)
-    state = EnvState(env, launcher, set(cfg["runtime"]["sensitive_env_keys"]))
+    if config_priority in CONFIG_PRIORITIES:
+        requested_priority, priority_note = config_priority, "explicit call override"
+    else:
+        requested_priority, priority_note = requested_config_priority(env)
+    launcher = load_server_launcher_json(env, cfg, requested_priority)
+    effective_priority = requested_priority if requested_priority != "dashboard" or launcher.loaded else "env"
+    state = EnvState(env, launcher, set(cfg["runtime"]["sensitive_env_keys"]), effective_priority)
+    if priority_note.startswith("invalid"):
+        state.warn(f"Configuration priority: {priority_note}.")
+    if requested_priority == "dashboard" and effective_priority == "env":
+        state.warn("Configuration priority: Dashboard config is unavailable; using ENV priority.")
     prepare_state(state, cfg)
 
     event_type = state.enum("EVENT_TYPE", cfg["mappings"]["event_type"], cfg["event_defaults"]["type"])
@@ -1260,7 +1390,10 @@ def build_documents(env: dict[str, str]) -> tuple[dict, dict, list[str]]:
 
 
 def encode_payload(document: dict) -> str:
-    compressed = zlib.compress(json.dumps(document, separators=(",", ":")).encode("utf-8"))
+    # AC EVO 0.8.1 intermittently exits while reading some Huffman-coded
+    # payloads. Stored DEFLATE blocks keep the standard zlib envelope while
+    # avoiding that data-dependent native decoder path.
+    compressed = zlib.compress(json.dumps(document, separators=(",", ":")).encode("utf-8"), level=0)
     return base64.b64encode(struct.pack("<I", len(compressed)) + compressed).decode("ascii")
 
 
