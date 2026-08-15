@@ -10,6 +10,7 @@ SERVER_INSTALL_DIR=/data/server
 DEDICATED_EXE_NAME=AssettoCorsaEVOServer.exe
 LAUNCHER_EXE_NAME=ServerLauncher.exe
 PROTON_BIN=/usr/local/bin/proton
+WINE_SERVER_BIN=/usr/local/bin/files/bin/wineserver
 XVFB_BIN=/usr/bin/Xvfb
 XVFB_DISPLAY="${XVFB_DISPLAY:-:99}"
 XVFB_SERVER_ARGS=(-screen 0 1024x768x24 -nolisten tcp -ac +extension GLX +render)
@@ -76,6 +77,18 @@ cleanup_xvfb() {
   fi
 }
 
+cleanup_wine() {
+  if [[ -x "${WINE_SERVER_BIN}" ]]; then
+    "${WINE_SERVER_BIN}" -k >/dev/null 2>&1 || true
+    "${WINE_SERVER_BIN}" -w >/dev/null 2>&1 || true
+  fi
+}
+
+cleanup_runtime() {
+  cleanup_wine
+  cleanup_xvfb
+}
+
 start_xvfb() {
   export DISPLAY="${XVFB_DISPLAY}"
   export SDL_VIDEODRIVER="${SDL_VIDEODRIVER:-x11}"
@@ -94,7 +107,7 @@ start_xvfb() {
   fi
 }
 
-trap cleanup_xvfb EXIT
+trap cleanup_runtime EXIT
 
 run_gracefully() {
   local label="$1"

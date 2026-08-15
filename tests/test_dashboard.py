@@ -544,14 +544,40 @@ class ServerControlTests(unittest.TestCase):
         server_control._proc = FakeProc(pid=4242, poll_result=0, alive_polls=1)
         with (
             patch.object(server_control.os, "killpg", create=True) as killpg,
+            patch.object(server_control, "_wait_process_group_exit") as wait_group,
             patch.object(live, "reset") as reset_live,
         ):
             result = server_control.stop()
         self.assertFalse(result["running"])
         killpg.assert_called()
         self.assertEqual(killpg.call_args_list[0][0][1], server_control.signal.SIGTERM)
+        wait_group.assert_called_once_with(4242)
         self.assertIsNone(server_control._proc)
         reset_live.assert_called_once_with()
+
+    def test_restart_allows_runtime_to_settle_before_start(self):
+        order = []
+        with (
+            patch.object(server_control, "stop", side_effect=lambda: order.append("stop")),
+            patch.object(server_control.time, "sleep", side_effect=lambda _seconds: order.append("settle")),
+            patch.object(
+                server_control,
+                "start",
+                side_effect=lambda: order.append("start") or {"ok": True, "running": True},
+            ),
+        ):
+            result = server_control.restart()
+        self.assertTrue(result["running"])
+        self.assertEqual(order, ["stop", "settle", "start"])
+
+    def test_lingering_process_group_is_killed_before_restart(self):
+        with (
+            patch.object(server_control, "_process_group_exists", side_effect=[True, True, False]),
+            patch.object(server_control.time, "monotonic", side_effect=[0.0, 6.0, 6.0]),
+            patch.object(server_control, "_signal_group") as signal_group,
+        ):
+            server_control._wait_process_group_exit(4242)
+        signal_group.assert_called_once_with(4242, server_control._KILL_SIGNAL)
 
     def test_logs_returns_tail(self):
         log = self.tmp / "logs" / "server.log"

@@ -46,6 +46,9 @@ class StartupUpdateTests(unittest.TestCase):
         self.assertIn("/opt/acevo/scripts/update.sh", start_source)
         self.assertNotIn("/opt/acevo/scripts/update.sh", run_server_source)
         self.assertNotIn("AUTO_UPDATE", run_server_source)
+        self.assertIn("cleanup_wine", run_server_source)
+        self.assertIn('"${WINE_SERVER_BIN}" -k', run_server_source)
+        self.assertIn('"${WINE_SERVER_BIN}" -w', run_server_source)
 
     def test_auto_update_false_skips_update(self):
         result, events = self.run_update_flow("false")
