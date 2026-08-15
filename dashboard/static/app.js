@@ -7,6 +7,7 @@ import {
   formatLapDelta,
   formatLapTime,
   matchesCategoryFilters,
+  matchesPiFilter,
   parseMobileSectionState,
   preferredTrack,
   selectedByCategoryFilters,
@@ -28,6 +29,8 @@ const api = {
 };
 
 let META = null;
+let MODS = { mods: [], total_size: 0, running: false };
+let modMutationActive = false;
 const state = { server: {}, event: {}, sessions: {} };
 const carState = new Map(); // internal_name -> { is_selected, ballast, restrictor }
 const carFilters = {
@@ -159,6 +162,20 @@ function toast(message) {
   el.classList.add("show");
   clearTimeout(toast._t);
   toast._t = setTimeout(() => el.classList.remove("show"), 3200);
+}
+
+function formatBytes(value) {
+  const bytes = Number(value) || 0;
+  if (bytes < 1024) return `${bytes} B`;
+  const units = ["KiB", "MiB", "GiB", "TiB"];
+  let amount = bytes;
+  let unit = "B";
+  for (const next of units) {
+    amount /= 1024;
+    unit = next;
+    if (amount < 1024) break;
+  }
+  return `${amount.toFixed(amount >= 10 ? 1 : 2)} ${unit}`;
 }
 
 function confirmDialog(message, headline = "Confirm") {
@@ -519,9 +536,10 @@ function renderCars() {
 }
 
 function carMatches(car) {
-  if (carFilters.text && !car.display_name.toLowerCase().includes(carFilters.text.toLowerCase())) return false;
+  const searchText = `${car.display_name} ${car.internal_name}`.toLowerCase();
+  if (carFilters.text && !searchText.includes(carFilters.text.toLowerCase())) return false;
   if (!matchesCategoryFilters(car, carFilters)) return false;
-  if (car.pi < carFilters.piMin - 1e-6 || car.pi > carFilters.piMax + 1e-6) return false;
+  if (!matchesPiFilter(car, carFilters.piMin, carFilters.piMax)) return false;
   if (carFilters.onlySelected && !carState.get(car.internal_name).is_selected) return false;
   return true;
 }
@@ -553,11 +571,19 @@ function renderCarList() {
     nameWrap.className = "car-info";
     const name = document.createElement("div");
     name.className = "car-name";
-    name.textContent = car.display_name;
+    const nameText = document.createElement("span");
+    nameText.textContent = car.display_name;
+    name.append(nameText);
+    if (car.is_mod) {
+      const badge = document.createElement("span");
+      badge.className = "car-mod-badge";
+      badge.textContent = "MOD";
+      name.append(badge);
+    }
     name.title = car.display_name;
     const pi = document.createElement("div");
     pi.className = "car-pi";
-    pi.textContent = `Pi ${car.pi} · ${car.type}/${car.era}/${car.engine}`;
+    pi.textContent = car.is_mod ? car.internal_name : `Pi ${car.pi} · ${car.type}/${car.era}/${car.engine}`;
     pi.title = pi.textContent;
     nameWrap.append(name, pi);
 
@@ -839,6 +865,237 @@ function loadForm(saved) {
   carFilters.classes.clear();
 }
 
+async function refreshCarCatalog() {
+  const previous = new Map(carState);
+  META = await api.get("/api/metadata");
+  carState.clear();
+  for (const car of META.cars) {
+    carState.set(
+      car.internal_name,
+      previous.get(car.internal_name) || { is_selected: false, ballast: 0, restrictor: 0 },
+    );
+  }
+  carFilters.piMin = META.pi_min;
+  carFilters.piMax = META.pi_max;
+  renderCars();
+  runValidate();
+}
+
+// --- mods -----------------------------------------------------------------------------------
+
+function updateModControls() {
+  const input = byId("mod-file");
+  const button = byId("btn-mod-upload");
+  input.disabled = modMutationActive;
+  button.disabled = modMutationActive || !input.files?.length;
+}
+
+function renderMods() {
+  const rows = byId("mods-rows");
+  rows.replaceChildren();
+  if (!MODS.mods.length) {
+    const empty = document.createElement("div");
+    empty.className = "mods-empty";
+    empty.textContent = "No mods installed yet.";
+    rows.append(empty);
+  }
+
+  for (const mod of MODS.mods) {
+    const row = document.createElement("div");
+    row.className = "mods-row";
+    row.setAttribute("role", "row");
+
+    const file = document.createElement("div");
+    file.className = "mod-file";
+    file.textContent = mod.filename;
+    file.title = mod.filename;
+
+    const cars = document.createElement("div");
+    cars.className = "mod-cars";
+    cars.textContent = mod.cars.map((car) => car.display_name).join(", ") || "—";
+    cars.title = cars.textContent;
+
+    const variants = document.createElement("div");
+    variants.className = "mod-variants";
+    variants.textContent = String(mod.variant_count || 0);
+    variants.title = (mod.preset_ids || []).join("\n");
+
+    const size = document.createElement("div");
+    size.className = "mod-size";
+    size.textContent = formatBytes(mod.size);
+
+    const status = document.createElement("div");
+    status.className = "mod-state";
+    const statusBadge = document.createElement("span");
+    statusBadge.className = `mod-status ${mod.status}`;
+    statusBadge.textContent = mod.status === "ready" ? "Ready" : mod.status === "conflict" ? "Conflict" : "Invalid";
+    statusBadge.title = mod.error || (mod.preset_ids || []).join("\n");
+    status.append(statusBadge);
+
+    const actions = document.createElement("div");
+    actions.className = "mod-actions";
+    const deleteButton = document.createElement("md-icon-button");
+    deleteButton.disabled = modMutationActive;
+    deleteButton.setAttribute("aria-label", `Delete ${mod.filename}`);
+    deleteButton.title = `Delete ${mod.filename}`;
+    const deleteIcon = document.createElement("md-icon");
+    deleteIcon.textContent = "delete";
+    deleteButton.append(deleteIcon);
+    deleteButton.addEventListener("click", () => deleteMod(mod.filename));
+    actions.append(deleteButton);
+
+    row.append(file, cars, variants, size, status, actions);
+    rows.append(row);
+  }
+
+  byId("mods-summary").textContent =
+    `${MODS.mods.length} mod${MODS.mods.length === 1 ? "" : "s"} · ${formatBytes(MODS.total_size)}`;
+  updateModControls();
+}
+
+async function refreshMods() {
+  try {
+    const result = await api.get("/api/mods");
+    if (result.error) throw new Error(result.error);
+    MODS = result;
+    renderMods();
+  } catch (error) {
+    byId("mods-summary").textContent = `Could not load mods: ${error}`;
+  }
+}
+
+function uploadModRequest(file) {
+  return new Promise((resolve, reject) => {
+    const request = new XMLHttpRequest();
+    request.open("POST", `/api/mods/upload?filename=${encodeURIComponent(file.name)}`);
+    request.setRequestHeader("Content-Type", "application/octet-stream");
+    request.upload.addEventListener("progress", (event) => {
+      if (!event.lengthComputable) return;
+      const percent = Math.round((event.loaded / event.total) * 100);
+      byId("mod-upload-progress-bar").style.width = `${percent}%`;
+      byId("mod-upload-label").textContent = `Uploading… ${percent}%`;
+    });
+    request.addEventListener("load", () => {
+      let body = {};
+      try {
+        body = JSON.parse(request.responseText || "{}");
+      } catch {
+        body = {};
+      }
+      if (request.status >= 200 && request.status < 300) resolve(body);
+      else reject(new Error(body.error || `HTTP ${request.status}`));
+    });
+    request.addEventListener("error", () => reject(new Error("network error")));
+    request.addEventListener("abort", () => reject(new Error("upload aborted")));
+    request.send(file);
+  });
+}
+
+async function modServerIsRunning() {
+  try {
+    const status = await api.get("/api/server/status");
+    MODS.running = !!status.running;
+  } catch {
+    // Keep the latest known status; the mutation endpoint still performs its own check.
+  }
+  return MODS.running;
+}
+
+async function stopServerForModChange() {
+  if (!MODS.running) return true;
+  let result;
+  try {
+    result = await api.post("/api/server/stop");
+  } catch (error) {
+    toast(`Could not stop server: ${error.message || error}`);
+    return false;
+  }
+  if (!result.ok) {
+    toast(`Could not stop server: ${result.error || result.stderr || "unknown error"}`);
+    return false;
+  }
+  MODS.running = false;
+  renderMods();
+  toast("Server stopped.");
+  refreshStatus();
+  refreshLiveSoon();
+  return true;
+}
+
+async function uploadMod() {
+  const input = byId("mod-file");
+  const file = input.files?.[0];
+  if (!file || modMutationActive) return;
+  modMutationActive = true;
+  updateModControls();
+  renderMods();
+  try {
+    const serverRunning = await modServerIsRunning();
+    if (
+      serverRunning &&
+      !(await confirmDialog(
+        `The game server is currently running and must be stopped to install ${file.name}. Stop it now and continue? Connected players will be disconnected.`,
+        "Stop server and install mod",
+      ))
+    ) {
+      return;
+    }
+    if (!(await stopServerForModChange())) return;
+    byId("mod-upload-progress").classList.remove("hidden");
+    byId("mod-upload-progress-bar").style.width = "0";
+    byId("mod-upload-label").textContent = "Uploading… 0%";
+    await uploadModRequest(file);
+    toast(`${file.name} installed`);
+    input.value = "";
+    byId("mod-file-name").textContent = "Choose a .kspkg file…";
+    await refreshMods();
+    await refreshCarCatalog();
+  } catch (error) {
+    toast(`Install failed: ${error.message || error}`);
+  } finally {
+    modMutationActive = false;
+    byId("mod-upload-progress").classList.add("hidden");
+    byId("mod-upload-label").textContent = "";
+    updateModControls();
+    renderMods();
+  }
+}
+
+async function deleteMod(filename) {
+  if (modMutationActive) return;
+  modMutationActive = true;
+  renderMods();
+  const serverRunning = await modServerIsRunning();
+  const message = serverRunning
+    ? `The game server is currently running and must be stopped to delete ${filename}. Stop the server and delete the mod? Connected players will be disconnected.`
+    : `Delete ${filename}? Its vehicle variants will be removed from the active configuration automatically.`;
+  if (!(await confirmDialog(message, serverRunning ? "Stop server and delete mod" : "Delete mod"))) {
+    modMutationActive = false;
+    renderMods();
+    return;
+  }
+
+  try {
+    if (!(await stopServerForModChange())) return;
+    const result = await api.post("/api/mods/delete", { filename });
+    if (result.error) {
+      toast(`Delete failed: ${result.error}`);
+      return;
+    }
+    const removed = result.deselected?.length || 0;
+    toast(
+      removed
+        ? `${filename} deleted · ${removed} variant${removed === 1 ? "" : "s"} removed from configuration`
+        : `${filename} deleted`,
+    );
+    await refreshMods();
+    await refreshCarCatalog();
+  } finally {
+    modMutationActive = false;
+    renderMods();
+  }
+}
+
 function scheduleValidate() {
   clearTimeout(validateTimer);
   validateTimer = setTimeout(runValidate, 350);
@@ -983,6 +1240,7 @@ async function refreshStatus() {
     const chip = byId("status-chip");
     chip.className = "status-chip " + (s.state || "unknown");
     byId("status-text").textContent = statusLabel(s);
+    if (activeView === "mods" && MODS.running !== !!s.running) refreshMods();
   } catch {
     byId("status-text").textContent = "Unknown";
   }
@@ -1188,15 +1446,17 @@ function stopLogPolling() {
   logsTimer = null;
 }
 
-const VIEW_INDEX = { config: 0, live: 1, logs: 2, profiles: 3 };
+const VIEW_INDEX = { config: 0, mods: 1, live: 2, logs: 3, profiles: 4 };
 
 function setActiveView(view) {
   activeView = view;
   byId("config-view").classList.toggle("hidden", view !== "config");
+  byId("mods-view").classList.toggle("hidden", view !== "mods");
   byId("live-view").classList.toggle("hidden", view !== "live");
   byId("logs-view").classList.toggle("hidden", view !== "logs");
   byId("profiles-view").classList.toggle("hidden", view !== "profiles");
   byId("tab-config").active = view === "config";
+  byId("tab-mods").active = view === "mods";
   byId("tab-live").active = view === "live";
   byId("tab-logs").active = view === "logs";
   byId("tab-profiles").active = view === "profiles";
@@ -1206,6 +1466,7 @@ function setActiveView(view) {
   if (view === "live") startLivePolling();
   else stopLivePolling();
   if (view === "profiles") loadProfiles();
+  if (view === "mods") refreshMods();
 }
 
 function normalizeLogTail(value) {
@@ -1300,6 +1561,7 @@ function wireControls() {
   byId("btn-save-apply").addEventListener("click", doSaveApply);
   byId("btn-profile-save").addEventListener("click", saveProfile);
   byId("tab-config").addEventListener("click", () => setActiveView("config"));
+  byId("tab-mods").addEventListener("click", () => setActiveView("mods"));
   byId("tab-live").addEventListener("click", () => setActiveView("live"));
   byId("tab-logs").addEventListener("click", () => setActiveView("logs"));
   byId("tab-profiles").addEventListener("click", () => setActiveView("profiles"));
@@ -1308,6 +1570,12 @@ function wireControls() {
   byId("btn-log-refresh").addEventListener("click", refreshLogs);
   byId("btn-copy-logs").addEventListener("click", copyLogs);
   byId("btn-download-logs").addEventListener("click", downloadLogs);
+  byId("mod-file").addEventListener("change", () => {
+    const file = byId("mod-file").files?.[0];
+    byId("mod-file-name").textContent = file ? file.name : "Choose a .kspkg file…";
+    updateModControls();
+  });
+  byId("btn-mod-upload").addEventListener("click", uploadMod);
   byId("theme-switch").addEventListener("change", (e) => setTheme(e.target.selected));
   mobileLayoutQuery.addEventListener("change", syncMobileCollapsibles);
 }

@@ -19,7 +19,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
 
-from . import config_io, live, metadata, server_control
+from . import config_io, live, metadata, mods, server_control
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 STATIC_DIR = Path(__file__).resolve().parent / "static"
@@ -165,6 +165,12 @@ class DashboardHandler(BaseHTTPRequestHandler):
             if route == "/api/server/logs":
                 tail = int((parse_qs(parts.query).get("tail") or ["200"])[0] or 200)
                 return self._send_json(server_control.logs(tail=tail))
+            if route == "/api/mods":
+                result = mods.inventory()
+                result["running"] = server_control.status()["running"]
+                return self._send_json(result)
+        except mods.ModError as exc:
+            return self._send_json({"error": str(exc)}, exc.status)
         except Exception as exc:  # noqa: BLE001 - surface any failure as JSON, never 500-crash the loop
             return self._send_json({"error": str(exc)}, 500)
         return self._send_json({"error": "not found"}, 404)
@@ -172,7 +178,21 @@ class DashboardHandler(BaseHTTPRequestHandler):
     def do_POST(self) -> None:
         if not self._authorized():
             return self._send_401()
-        route = urlsplit(self.path).path
+        parts = urlsplit(self.path)
+        route = parts.path
+        if route == "/api/mods/upload":
+            try:
+                length = int(self.headers.get("Content-Length") or 0)
+            except ValueError:
+                return self._send_json({"error": "invalid Content-Length"}, 400)
+            filename = (parse_qs(parts.query).get("filename") or [""])[0]
+            try:
+                return self._send_json(mods.upload(self.rfile, length, filename, config_path=self.config.config_path))
+            except mods.ModError as exc:
+                return self._send_json({"error": str(exc)}, exc.status)
+            except Exception as exc:  # noqa: BLE001
+                return self._send_json({"error": str(exc)}, 500)
+
         body = self._read_json_body()
         if body is None:
             return self._send_json({"error": "invalid JSON body"}, 400)
@@ -193,6 +213,10 @@ class DashboardHandler(BaseHTTPRequestHandler):
                 return self._send_json(server_control.stop())
             if route == "/api/server/restart":
                 return self._send_json(server_control.restart())
+            if route == "/api/mods/delete":
+                return self._send_json(mods.delete(name or body.get("filename"), self.config.config_path))
+        except mods.ModError as exc:
+            return self._send_json({"error": str(exc)}, exc.status)
         except Exception as exc:  # noqa: BLE001
             return self._send_json({"error": str(exc)}, 500)
         return self._send_json({"error": "not found"}, 404)

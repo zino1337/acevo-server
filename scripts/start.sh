@@ -27,6 +27,10 @@ run_server_update_if_enabled() {
   fi
 }
 
+prepare_mod_storage() {
+  python3 -m dashboard.mods
+}
+
 main() {
   if [[ "${PUID}" -ne 0 && "$(id -u)" -eq 0 ]]; then
     echo "Switching to user PUID=${PUID} and PGID=${PGID}..."
@@ -51,6 +55,7 @@ main() {
 
   mkdir -p /data
   run_server_update_if_enabled
+  prepare_mod_storage
   echo "Starting AC EVO dashboard (container main process) on port ${DASHBOARD_PORT:-8090} ..."
   exec python3 -m dashboard
 }

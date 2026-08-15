@@ -7,7 +7,6 @@ from the values the server pipeline actually accepts (car list, tracks, enum tok
 from __future__ import annotations
 
 import re
-from functools import lru_cache
 from pathlib import Path
 
 from scripts import launch_payloads as lp
@@ -82,17 +81,20 @@ def _racing_classes(car: dict) -> list[str]:
 
 
 def _car_entry(car: dict) -> dict:
+    is_mod = bool(car.get("is_mod"))
     return {
         "internal_name": car["internal_name"],
         "display_name": car["display_name"],
-        "pi": car.get("performance_indicator", 0.0),
-        "type": _TYPE_LABELS.get(car.get("property_1"), "road"),
-        "era": _ERA_LABELS.get(car.get("property_2"), "modern"),
-        "engine": _ENGINE_LABELS.get(car.get("property_3"), "ice"),
+        "pi": None if is_mod else car.get("performance_indicator", 0.0),
+        "type": None if is_mod else _TYPE_LABELS.get(car.get("property_1"), "road"),
+        "era": None if is_mod else _ERA_LABELS.get(car.get("property_2"), "modern"),
+        "engine": None if is_mod else _ENGINE_LABELS.get(car.get("property_3"), "ice"),
         "classes": _racing_classes(car),
-        "p1": car.get("property_1", 0),
-        "p2": car.get("property_2", 0),
-        "p3": car.get("property_3", 0),
+        "p1": 0 if is_mod else car.get("property_1", 0),
+        "p2": 0 if is_mod else car.get("property_2", 0),
+        "p3": 0 if is_mod else car.get("property_3", 0),
+        "is_mod": is_mod,
+        "mod_file": car.get("mod_file", ""),
     }
 
 
@@ -198,9 +200,8 @@ def _defaults(cfg: dict) -> dict:
     }
 
 
-@lru_cache(maxsize=1)
 def build_metadata() -> dict:
-    """Return everything the frontend needs to render the form (cached for the process)."""
+    """Return everything the frontend needs, including the current mod directory."""
     cfg = lp.load_config()
     cars = [_car_entry(car) for car in cfg["cars_data"]]
     pis = [car["pi"] for car in cars if isinstance(car["pi"], (int, float))]

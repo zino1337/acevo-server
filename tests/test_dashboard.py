@@ -12,7 +12,7 @@ import urllib.request
 from pathlib import Path
 from unittest.mock import patch
 
-from dashboard import app, config_io, live, metadata, server_control
+from dashboard import app, config_io, live, metadata, mods, server_control
 from scripts import launch_payloads
 
 FIXTURE = Path(__file__).parent / "fixtures" / "server_launcher_windows_sample.json"
@@ -565,6 +565,37 @@ class FrontendStaticTests(unittest.TestCase):
         self.assertIn(".live-driver-row", css)
         self.assertIn("grid-template-columns: 32px repeat(3, minmax(0, 1fr))", css)
 
+    def test_mods_tab_is_kspkg_only_and_contains_client_instructions(self):
+        static = Path(__file__).parents[1] / "dashboard" / "static"
+        css = (static / "theme.css").read_text(encoding="utf-8")
+        html = (static / "index.html").read_text(encoding="utf-8")
+        app_js = (static / "app.js").read_text(encoding="utf-8")
+
+        self.assertIn('id="tab-mods"', html)
+        self.assertIn('id="mods-view"', html)
+        self.assertIn('<ol class="mods-help">', html)
+        self.assertIn('accept=".kspkg"', html)
+        self.assertIn("<span>Size</span>", html)
+        self.assertIn("asks before stopping it", html)
+        self.assertIn("The car and its variants are", html)
+        self.assertIn("open the Configuration tab", html)
+        self.assertIn("As a client, every driver", html)
+        self.assertIn(r"%USERPROFILE%\Saved Games\ACE\mods", html)
+        self.assertNotIn('accept=".json"', html)
+        self.assertNotIn("quota", html.lower())
+        self.assertIn("/api/mods/upload?filename=", app_js)
+        self.assertIn('request.upload.addEventListener("progress"', app_js)
+        self.assertIn("removed from the active configuration automatically", app_js)
+        self.assertIn("async function modServerIsRunning()", app_js)
+        self.assertIn("async function stopServerForModChange()", app_js)
+        self.assertIn('result = await api.post("/api/server/stop")', app_js)
+        self.assertIn("Stop server and install mod", app_js)
+        self.assertIn("Stop server and delete mod", app_js)
+        self.assertIn("input.disabled = modMutationActive", app_js)
+        self.assertIn("deleteButton.disabled = modMutationActive", app_js)
+        self.assertIn("matchesPiFilter", app_js)
+        self.assertIn(".mods-row", css)
+
 
 class HttpIntegrationTests(unittest.TestCase):
     def make(self, password, config_path=Path("nonexistent.json")):
@@ -606,6 +637,40 @@ class HttpIntegrationTests(unittest.TestCase):
         finally:
             httpd.shutdown()
             httpd.server_close()
+
+    def test_mod_routes_list_volume_and_reject_invalid_upload(self):
+        with tempfile.TemporaryDirectory() as temp:
+            mods_dir = Path(temp) / "mods"
+            mods_dir.mkdir()
+            (mods_dir / "companion.json").write_text('{"ignored": true}', encoding="utf-8")
+            httpd, port = self.make("")
+            try:
+                with (
+                    patch.dict(os.environ, {"ACEVO_MODS_DIR": str(mods_dir)}, clear=False),
+                    patch.object(server_control, "status", return_value={"running": False, "state": "stopped"}),
+                ):
+                    with self.get(port, "/api/mods") as response:
+                        body = json.loads(response.read())
+                    self.assertEqual(body["mods"], [])
+                    self.assertFalse(body["running"])
+
+                    request = urllib.request.Request(
+                        f"http://127.0.0.1:{port}/api/mods/upload?filename=broken.kspkg",
+                        data=b"not a package",
+                        headers={"Content-Type": "application/octet-stream"},
+                        method="POST",
+                    )
+                    with self.assertRaises(urllib.error.HTTPError) as ctx:
+                        urllib.request.urlopen(request, timeout=5)
+                    self.assertEqual(ctx.exception.code, 400)
+                    error = json.loads(ctx.exception.read())
+                    self.assertIn("file table", error["error"])
+                    ctx.exception.close()
+            finally:
+                httpd.shutdown()
+                httpd.server_close()
+
+            self.assertEqual([path.name for path in mods_dir.iterdir()], ["companion.json"])
 
     def test_live_route_is_authenticated_and_omits_private_data(self):
         httpd, port = self.make("s3cret")

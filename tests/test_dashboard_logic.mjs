@@ -6,6 +6,7 @@ import {
   formatLapTime,
   hasActiveCategoryFilters,
   matchesCategoryFilters,
+  matchesPiFilter,
   parseMobileSectionState,
   preferredTrack,
   selectedByCategoryFilters,
@@ -58,6 +59,12 @@ test("empty category filters show all cars and select none", () => {
   assert.equal(hasActiveCategoryFilters(filters), false);
   assert.equal(matchesCategoryFilters(car, filters), true);
   assert.equal(selectedByCategoryFilters(car, filters), false);
+});
+
+test("PI filters never hide mods with unknown performance", () => {
+  assert.equal(matchesPiFilter({ is_mod: true, pi: null }, 20, 30), true);
+  assert.equal(matchesPiFilter({ is_mod: false, pi: 25 }, 20, 30), true);
+  assert.equal(matchesPiFilter({ is_mod: false, pi: 40 }, 20, 30), false);
 });
 
 test("mobile section preferences accept only boolean entries", () => {

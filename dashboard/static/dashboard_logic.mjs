@@ -25,6 +25,10 @@ export function selectedByCategoryFilters(car, filters) {
   return hasActiveCategoryFilters(filters) && matchesCategoryFilters(car, filters);
 }
 
+export function matchesPiFilter(car, minimum, maximum) {
+  return car.is_mod || (car.pi >= minimum - 1e-6 && car.pi <= maximum + 1e-6);
+}
+
 export function parseMobileSectionState(raw) {
   if (!raw) return {};
   try {

@@ -42,6 +42,7 @@
     <nav class="tabbar" aria-label="Dashboard sections">
       <md-tabs id="main-tabs">
         <md-primary-tab id="tab-config" active>Configuration</md-primary-tab>
+        <md-primary-tab id="tab-mods">Mods</md-primary-tab>
         <md-primary-tab id="tab-live">Live</md-primary-tab>
         <md-primary-tab id="tab-logs">Logs</md-primary-tab>
         <md-primary-tab id="tab-profiles">Profiles</md-primary-tab>
@@ -67,7 +68,7 @@
           <div id="event-fields" class="field-grid"></div>
         </div>
         <div class="card" data-mobile-section="cars">
-          <h2>Cars</h2>
+          <h2>Car Restrictions</h2>
           <div id="cars-container"></div>
         </div>
       </section>
@@ -77,6 +78,58 @@
         <div class="card" data-mobile-section="preview-validation">
           <h2>Preview &amp; Validation</h2>
           <div id="preview" class="preview"></div>
+        </div>
+      </section>
+    </main>
+
+    <main id="mods-view" class="mods-view hidden">
+      <section class="card mods-card">
+        <h2>Mods</h2>
+        <ol class="mods-help">
+          <li>
+            Install or delete mods here. If the game server is running, the dashboard asks before stopping it
+            automatically.
+          </li>
+          <li>
+            Upload one <code>.kspkg</code> here, or copy it to <code>/data/mods</code>. The car and its variants are
+            detected automatically.
+          </li>
+          <li>To use the new cars, open the Configuration tab and select them under Car Restrictions.</li>
+          <li>
+            As a client, every driver must copy the exact same <code>.kspkg</code> into their own game at
+            <code>%USERPROFILE%\Saved Games\ACE\mods</code>. AC EVO rejects missing or different files.
+          </li>
+        </ol>
+
+        <div class="mods-table" role="table" aria-label="Installed mods">
+          <div class="mods-row mods-head" role="row">
+            <span>File</span>
+            <span>Car</span>
+            <span>Variants</span>
+            <span>Size</span>
+            <span>Status</span>
+            <span></span>
+          </div>
+          <div id="mods-rows" role="rowgroup"></div>
+        </div>
+        <div id="mods-summary" class="mods-summary">Loading mods…</div>
+
+        <div class="mods-install">
+          <h3>Install a mod</h3>
+          <div class="mods-upload-row">
+            <label class="mods-file-picker">
+              <input id="mod-file" type="file" accept=".kspkg" />
+              <span id="mod-file-name">Choose a .kspkg file…</span>
+            </label>
+            <md-filled-button id="btn-mod-upload" disabled>
+              <md-icon slot="icon">upload</md-icon>
+              Install
+            </md-filled-button>
+          </div>
+          <div id="mod-upload-progress" class="mod-upload-progress hidden" aria-label="Upload progress">
+            <div id="mod-upload-progress-bar"></div>
+          </div>
+          <div id="mod-upload-label" class="mod-upload-label"></div>
         </div>
       </section>
     </main>

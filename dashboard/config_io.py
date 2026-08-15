@@ -144,8 +144,11 @@ def _cars_block(cfg: dict, cars_form: list) -> list[dict]:
         selected = bool(override.get("is_selected", False))
         ballast = float(override.get("ballast", 0.0))
         restrictor = float(override.get("restrictor", 0.0))
-        pi = car.get("performance_indicator", 0.0)
-        p1, p2, p3 = car.get("property_1", 0), car.get("property_2", 0), car.get("property_3", 0)
+        pi = _as_float(car.get("performance_indicator"), 0.0)
+        p1 = _as_int(car.get("property_1"), 0)
+        p2 = _as_int(car.get("property_2"), 0)
+        p3 = _as_int(car.get("property_3"), 0)
+        is_mod = bool(car.get("is_mod"))
         cars.append(
             {
                 "is_selected": selected,
@@ -155,10 +158,10 @@ def _cars_block(cfg: dict, cars_form: list) -> list[dict]:
                 "property_1": p1,
                 "property_2": p2,
                 "property_3": p3,
-                "is_mod": False,
+                "is_mod": is_mod,
                 "name": name,
                 "display_name": car.get("display_name", ""),
-                "IsModText": "",
+                "IsModText": "MOD" if is_mod else "",
                 "IsSelected": selected,
                 "Ballast": ballast,
                 "Restrictor": restrictor,
@@ -166,7 +169,7 @@ def _cars_block(cfg: dict, cars_form: list) -> list[dict]:
                 "P1": p1,
                 "P2": p2,
                 "P3": p3,
-                "IsMod": False,
+                "IsMod": is_mod,
             }
         )
     return cars

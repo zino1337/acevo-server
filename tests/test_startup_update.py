@@ -66,6 +66,14 @@ class StartupUpdateTests(unittest.TestCase):
         self.assertEqual(events, ["update", "dashboard"])
         self.assertIn("Steam update failed with exit code 42", result.stderr)
 
+    def test_mod_storage_is_prepared_before_dashboard(self):
+        source = START_SCRIPT.read_text()
+        main = source.split("main() {", 1)[1]
+
+        self.assertIn("python3 -m dashboard.mods", source)
+        self.assertLess(main.index("run_server_update_if_enabled"), main.index("prepare_mod_storage"))
+        self.assertLess(main.index("prepare_mod_storage"), main.index("exec python3 -m dashboard"))
+
 
 if __name__ == "__main__":
     unittest.main()
