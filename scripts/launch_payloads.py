@@ -1390,7 +1390,10 @@ def build_documents(env: dict[str, str]) -> tuple[dict, dict, list[str]]:
 
 
 def encode_payload(document: dict) -> str:
-    compressed = zlib.compress(json.dumps(document, separators=(",", ":")).encode("utf-8"))
+    # The 0.8.1 native server can exit while decoding particular Huffman-coded
+    # zlib streams even though the JSON and stream are valid.  Stored DEFLATE
+    # blocks are deterministic and avoid that data-dependent decoder path.
+    compressed = zlib.compress(json.dumps(document, separators=(",", ":")).encode("utf-8"), level=0)
     return base64.b64encode(struct.pack("<I", len(compressed)) + compressed).decode("ascii")
 
 

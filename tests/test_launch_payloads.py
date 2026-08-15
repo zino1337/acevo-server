@@ -868,6 +868,7 @@ class LaunchPayloadTests(unittest.TestCase):
         raw = base64.b64decode(payload)
         declared_length = struct.unpack("<I", raw[:4])[0]
         self.assertEqual(declared_length, len(raw) - 4)
+        self.assertEqual(raw[4:6], b"x\x01")
 
         decoded = launch_payloads.decode_payload(payload)
         self.assertEqual(decoded, server_doc)
