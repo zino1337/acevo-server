@@ -4,6 +4,7 @@ import os
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
 from dashboard import config_io, mods
@@ -256,6 +257,165 @@ class ModManagerTests(unittest.TestCase):
             self.assertEqual(result["installed"], "installed.kspkg")
             self.assertTrue((target / "installed.kspkg").is_file())
             self.assertFalse(list(target.glob("*.part")))
+
+    def test_chunked_upload_resumes_and_installs_from_confirmed_offset(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            source = write_kspkg(root / "source.kspkg")
+            target = root / "mods"
+            config_path = root / "server_launcher.json"
+            with patch.object(mods, "_server_running", return_value=False):
+                session = mods.start_upload("resume.kspkg", source.stat().st_size, 123, config_path, target)
+                first_size = 1024 * 1024
+                with source.open("rb") as handle:
+                    first = handle.read(first_size)
+                progress = mods.upload_chunk(
+                    io.BytesIO(first), first_size, session["upload_id"], 0, config_path, target
+                )
+                # Startup cleanup reads the persisted manifest and keeps a fresh session.
+                mods.cleanup_upload_sessions(target)
+                resumed = mods.start_upload("resume.kspkg", source.stat().st_size, 123, config_path, target)
+
+                self.assertEqual(progress["offset"], first_size)
+                self.assertEqual(resumed["upload_id"], session["upload_id"])
+                self.assertEqual(resumed["offset"], first_size)
+
+                offset = resumed["offset"]
+                with source.open("rb") as handle:
+                    while offset < source.stat().st_size:
+                        handle.seek(offset)
+                        chunk = handle.read(min(mods.MAX_UPLOAD_CHUNK_SIZE, source.stat().st_size - offset))
+                        result = mods.upload_chunk(
+                            io.BytesIO(chunk),
+                            len(chunk),
+                            session["upload_id"],
+                            offset,
+                            config_path,
+                            target,
+                        )
+                        offset = result["offset"]
+
+            self.assertTrue(result["complete"])
+            self.assertEqual(result["installed"], "resume.kspkg")
+            self.assertTrue((target / "resume.kspkg").is_file())
+            self.assertEqual(list((target / mods.UPLOADS_DIRNAME).iterdir()), [])
+
+    def test_new_file_with_same_name_replaces_only_partial_upload(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            target = root / "mods"
+            config_path = root / "server_launcher.json"
+            with patch.object(mods, "_server_running", return_value=False):
+                first = mods.start_upload("replace.kspkg", 10, 1, config_path, target)
+                mods.upload_chunk(io.BytesIO(b"abc"), 3, first["upload_id"], 0, config_path, target)
+                second = mods.start_upload("replace.kspkg", 12, 2, config_path, target)
+
+                self.assertNotEqual(first["upload_id"], second["upload_id"])
+                self.assertEqual(second["offset"], 0)
+                with self.assertRaisesRegex(mods.ModError, "not found"):
+                    mods.upload_status(first["upload_id"], target)
+
+    def test_chunk_validation_preserves_received_bytes_and_rejects_large_or_wrong_offsets(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            target = root / "mods"
+            config_path = root / "server_launcher.json"
+            with patch.object(mods, "_server_running", return_value=False):
+                session = mods.start_upload("partial.kspkg", mods.MAX_UPLOAD_CHUNK_SIZE + 10, 1, config_path, target)
+                with self.assertRaisesRegex(mods.ModError, "ended before"):
+                    mods.upload_chunk(io.BytesIO(b"abc"), 5, session["upload_id"], 0, config_path, target)
+                self.assertEqual(mods.upload_status(session["upload_id"], target)["offset"], 3)
+                with self.assertRaisesRegex(mods.ModError, "offset mismatch"):
+                    mods.upload_chunk(io.BytesIO(b"x"), 1, session["upload_id"], 0, config_path, target)
+                with self.assertRaisesRegex(mods.ModError, "exceeds 8 MiB") as ctx:
+                    mods.upload_chunk(
+                        io.BytesIO(),
+                        mods.MAX_UPLOAD_CHUNK_SIZE + 1,
+                        session["upload_id"],
+                        3,
+                        config_path,
+                        target,
+                    )
+                self.assertEqual(ctx.exception.status, 413)
+
+    def test_upload_session_checks_storage_and_expires_after_24_hours(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            target = root / "mods"
+            config_path = root / "server_launcher.json"
+            with (
+                patch.object(mods, "_server_running", return_value=False),
+                patch.object(mods.shutil, "disk_usage", return_value=SimpleNamespace(free=0)),
+            ):
+                with self.assertRaisesRegex(mods.ModError, "not enough free storage") as ctx:
+                    mods.start_upload("full.kspkg", 10, 1, config_path, target)
+                self.assertEqual(ctx.exception.status, 507)
+
+            with patch.object(mods, "_server_running", return_value=False):
+                session = mods.start_upload("expires.kspkg", 10, 1, config_path, target)
+            manifest = target / mods.UPLOADS_DIRNAME / f"{session['upload_id']}.json"
+            document = json.loads(manifest.read_text(encoding="utf-8"))
+            document["updated_at"] = 100
+            manifest.write_text(json.dumps(document), encoding="utf-8")
+            mods.cleanup_upload_sessions(target, now=100 + mods.UPLOAD_SESSION_TTL_SECONDS)
+
+            self.assertEqual(list((target / mods.UPLOADS_DIRNAME).iterdir()), [])
+
+    def test_invalid_chunked_package_is_removed_after_final_check(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            target = root / "mods"
+            config_path = root / "server_launcher.json"
+            payload = b"not a package"
+            with patch.object(mods, "_server_running", return_value=False):
+                session = mods.start_upload("broken.kspkg", len(payload), 1, config_path, target)
+                with self.assertRaisesRegex(mods.ModError, "invalid KSPKG"):
+                    mods.upload_chunk(io.BytesIO(payload), len(payload), session["upload_id"], 0, config_path, target)
+
+            self.assertFalse((target / "broken.kspkg").exists())
+            self.assertEqual(list((target / mods.UPLOADS_DIRNAME).iterdir()), [])
+
+    def test_complete_session_waits_for_stopped_server_before_installing(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            source = write_kspkg(root / "source.kspkg")
+            target = root / "mods"
+            config_path = root / "server_launcher.json"
+            with patch.object(mods, "_server_running", return_value=False):
+                session = mods.start_upload("paused.kspkg", source.stat().st_size, 1, config_path, target)
+                offset = 0
+                with source.open("rb") as handle:
+                    while source.stat().st_size - offset > mods.MAX_UPLOAD_CHUNK_SIZE:
+                        chunk = handle.read(mods.MAX_UPLOAD_CHUNK_SIZE)
+                        progress = mods.upload_chunk(
+                            io.BytesIO(chunk),
+                            len(chunk),
+                            session["upload_id"],
+                            offset,
+                            config_path,
+                            target,
+                        )
+                        offset = progress["offset"]
+                    final = handle.read()
+
+            with patch.object(mods, "_server_running", side_effect=[False, True]):
+                with self.assertRaisesRegex(mods.ModError, "server started"):
+                    mods.upload_chunk(
+                        io.BytesIO(final),
+                        len(final),
+                        session["upload_id"],
+                        offset,
+                        config_path,
+                        target,
+                    )
+            self.assertEqual(mods.upload_status(session["upload_id"], target)["offset"], source.stat().st_size)
+            self.assertFalse((target / "paused.kspkg").exists())
+
+            with patch.object(mods, "_server_running", return_value=False):
+                result = mods.start_upload("paused.kspkg", source.stat().st_size, 1, config_path, target)
+
+            self.assertTrue(result["complete"])
+            self.assertTrue((target / "paused.kspkg").is_file())
 
     def test_upload_keeps_new_mod_unselected_in_active_config(self):
         with tempfile.TemporaryDirectory() as temp:

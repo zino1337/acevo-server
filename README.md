@@ -96,6 +96,8 @@ EVO rejects the connection.
 2. Open the **Configuration** tab, select the newly added car, and click **Save & Apply**.
 3. Every driver must install the exact same `.kspkg` locally at `%USERPROFILE%\Saved Games\ACE\mods` before joining.
 
+If an upload is interrupted, select the same file again within 24 hours and click **Install** to resume it.
+
 Without the dashboard, stop the server and copy `.kspkg` files to `./volumes/data/mods` (`/data/mods` inside the
 container).
 

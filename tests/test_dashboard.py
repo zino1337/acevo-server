@@ -570,6 +570,7 @@ class FrontendStaticTests(unittest.TestCase):
         css = (static / "theme.css").read_text(encoding="utf-8")
         html = (static / "index.html").read_text(encoding="utf-8")
         app_js = (static / "app.js").read_text(encoding="utf-8")
+        dashboard_logic = (static / "dashboard_logic.mjs").read_text(encoding="utf-8")
 
         self.assertIn('id="tab-mods"', html)
         self.assertIn('id="mods-view"', html)
@@ -583,8 +584,13 @@ class FrontendStaticTests(unittest.TestCase):
         self.assertIn(r"%USERPROFILE%\Saved Games\ACE\mods", html)
         self.assertNotIn('accept=".json"', html)
         self.assertNotIn("quota", html.lower())
-        self.assertIn("/api/mods/upload?filename=", app_js)
+        self.assertIn('fetch("/api/mods/upload/start"', app_js)
+        self.assertIn("/api/mods/upload/chunk?upload_id=", app_js)
+        self.assertIn("/api/mods/upload/status?upload_id=", app_js)
         self.assertIn('request.upload.addEventListener("progress"', app_js)
+        self.assertIn("Resuming upload at", app_js)
+        self.assertIn("The web proxy rejected the upload chunk", dashboard_logic)
+        self.assertIn(".mod-upload-label.error", css)
         self.assertIn("removed from the active configuration automatically", app_js)
         self.assertIn("async function modServerIsRunning()", app_js)
         self.assertIn("async function stopServerForModChange()", app_js)
@@ -671,6 +677,72 @@ class HttpIntegrationTests(unittest.TestCase):
                 httpd.server_close()
 
             self.assertEqual([path.name for path in mods_dir.iterdir()], ["companion.json"])
+
+    def test_chunk_upload_routes_report_offset_and_resume_session(self):
+        with tempfile.TemporaryDirectory() as temp:
+            mods_dir = Path(temp) / "mods"
+            mods_dir.mkdir()
+            httpd, port = self.make("")
+            payload = b"not a package"
+            try:
+                with (
+                    patch.dict(os.environ, {"ACEVO_MODS_DIR": str(mods_dir)}, clear=False),
+                    patch.object(server_control, "status", return_value={"running": False, "state": "stopped"}),
+                ):
+                    start_body = json.dumps(
+                        {"filename": "resume.kspkg", "size": len(payload), "last_modified": 123}
+                    ).encode()
+                    start_request = urllib.request.Request(
+                        f"http://127.0.0.1:{port}/api/mods/upload/start",
+                        data=start_body,
+                        headers={"Content-Type": "application/json"},
+                        method="POST",
+                    )
+                    with urllib.request.urlopen(start_request, timeout=5) as response:
+                        started = json.loads(response.read())
+                    self.assertEqual(started["offset"], 0)
+                    self.assertEqual(started["chunk_size"], mods.MAX_UPLOAD_CHUNK_SIZE)
+
+                    first_request = urllib.request.Request(
+                        f"http://127.0.0.1:{port}/api/mods/upload/chunk?upload_id={started['upload_id']}&offset=0",
+                        data=payload[:4],
+                        headers={"Content-Type": "application/octet-stream"},
+                        method="POST",
+                    )
+                    with urllib.request.urlopen(first_request, timeout=5) as response:
+                        first = json.loads(response.read())
+                    self.assertEqual(first["offset"], 4)
+                    self.assertFalse(first["complete"])
+
+                    with self.get(
+                        port,
+                        f"/api/mods/upload/status?upload_id={started['upload_id']}",
+                    ) as response:
+                        status = json.loads(response.read())
+                    self.assertEqual(status["offset"], 4)
+
+                    with urllib.request.urlopen(start_request, timeout=5) as response:
+                        resumed = json.loads(response.read())
+                    self.assertEqual(resumed["upload_id"], started["upload_id"])
+                    self.assertEqual(resumed["offset"], 4)
+
+                    final_request = urllib.request.Request(
+                        f"http://127.0.0.1:{port}/api/mods/upload/chunk?upload_id={started['upload_id']}&offset=4",
+                        data=payload[4:],
+                        headers={"Content-Type": "application/octet-stream"},
+                        method="POST",
+                    )
+                    with self.assertRaises(urllib.error.HTTPError) as ctx:
+                        urllib.request.urlopen(final_request, timeout=5)
+                    self.assertEqual(ctx.exception.code, 400)
+                    self.assertIn("invalid KSPKG", json.loads(ctx.exception.read())["error"])
+                    ctx.exception.close()
+            finally:
+                httpd.shutdown()
+                httpd.server_close()
+
+            self.assertFalse((mods_dir / "resume.kspkg").exists())
+            self.assertEqual(list((mods_dir / mods.UPLOADS_DIRNAME).iterdir()), [])
 
     def test_live_route_is_authenticated_and_omits_private_data(self):
         httpd, port = self.make("s3cret")

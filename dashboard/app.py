@@ -165,6 +165,9 @@ class DashboardHandler(BaseHTTPRequestHandler):
             if route == "/api/server/logs":
                 tail = int((parse_qs(parts.query).get("tail") or ["200"])[0] or 200)
                 return self._send_json(server_control.logs(tail=tail))
+            if route == "/api/mods/upload/status":
+                upload_id = (parse_qs(parts.query).get("upload_id") or [""])[0]
+                return self._send_json(mods.upload_status(upload_id))
             if route == "/api/mods":
                 result = mods.inventory()
                 result["running"] = server_control.status()["running"]
@@ -189,8 +192,35 @@ class DashboardHandler(BaseHTTPRequestHandler):
             try:
                 return self._send_json(mods.upload(self.rfile, length, filename, config_path=self.config.config_path))
             except mods.ModError as exc:
+                self.close_connection = True
                 return self._send_json({"error": str(exc)}, exc.status)
             except Exception as exc:  # noqa: BLE001
+                self.close_connection = True
+                return self._send_json({"error": str(exc)}, 500)
+
+        if route == "/api/mods/upload/chunk":
+            try:
+                length = int(self.headers.get("Content-Length") or 0)
+            except ValueError:
+                return self._send_json({"error": "invalid Content-Length"}, 400)
+            query = parse_qs(parts.query)
+            upload_id = (query.get("upload_id") or [""])[0]
+            offset = (query.get("offset") or [""])[0]
+            try:
+                return self._send_json(
+                    mods.upload_chunk(
+                        self.rfile,
+                        length,
+                        upload_id,
+                        offset,
+                        self.config.config_path,
+                    )
+                )
+            except mods.ModError as exc:
+                self.close_connection = True
+                return self._send_json({"error": str(exc)}, exc.status)
+            except Exception as exc:  # noqa: BLE001
+                self.close_connection = True
                 return self._send_json({"error": str(exc)}, 500)
 
         body = self._read_json_body()
@@ -199,6 +229,17 @@ class DashboardHandler(BaseHTTPRequestHandler):
         form = body.get("form", body) if isinstance(body, dict) else {}
         name = body.get("name") if isinstance(body, dict) else None
         try:
+            if route == "/api/mods/upload/start":
+                if not isinstance(body, dict):
+                    return self._send_json({"error": "JSON body must be an object"}, 400)
+                return self._send_json(
+                    mods.start_upload(
+                        body.get("filename"),
+                        body.get("size"),
+                        body.get("last_modified"),
+                        self.config.config_path,
+                    )
+                )
             if route == "/api/validate":
                 return self._send_json(config_io.validate(form))
             if route == "/api/save":

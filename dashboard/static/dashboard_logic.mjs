@@ -1,4 +1,17 @@
 export const trackIdentity = (token) => (token || "").split("|").slice(0, 2).join("|");
+export const MOD_UPLOAD_PROXY_LIMIT_MESSAGE =
+  "The web proxy rejected the upload chunk. Increase its maximum request body size to at least 8 MiB.";
+
+export function uploadPercent(offset, total) {
+  if (!(total > 0)) return 0;
+  return Math.max(0, Math.min(100, Math.round((offset / total) * 100)));
+}
+
+export function resumableUploadError(status, offset, total, sessionAvailable = false) {
+  if (status === 413) return MOD_UPLOAD_PROXY_LIMIT_MESSAGE;
+  if (![0, 502, 503, 504].includes(status) && !(status === 409 && sessionAvailable)) return "";
+  return `Upload paused at ${uploadPercent(offset, total)}%. Select the same file and click Install to resume.`;
+}
 
 export function preferredTrack(tracks, previous, remembered) {
   if (tracks.some((track) => track.token === remembered)) return remembered;

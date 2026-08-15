@@ -4,13 +4,16 @@
 
 import "./vendor/material-web.js";
 import {
+  MOD_UPLOAD_PROXY_LIMIT_MESSAGE,
   formatLapDelta,
   formatLapTime,
   matchesCategoryFilters,
   matchesPiFilter,
   parseMobileSectionState,
   preferredTrack,
+  resumableUploadError,
   selectedByCategoryFilters,
+  uploadPercent,
 } from "./dashboard_logic.mjs";
 
 const api = {
@@ -964,31 +967,134 @@ async function refreshMods() {
   }
 }
 
-function uploadModRequest(file) {
+class ModUploadError extends Error {
+  constructor(message, status = 0) {
+    super(message);
+    this.status = status;
+    this.uploadId = "";
+    this.confirmedOffset = 0;
+    this.totalSize = 0;
+    this.sessionAvailable = false;
+  }
+}
+
+function parseUploadResponse(responseText) {
+  try {
+    return JSON.parse(responseText || "{}");
+  } catch {
+    return {};
+  }
+}
+
+function setModUploadProgress(offset, total, label) {
+  const percent = uploadPercent(offset, total);
+  byId("mod-upload-progress").classList.remove("hidden");
+  byId("mod-upload-progress-bar").style.width = `${percent}%`;
+  byId("mod-upload-label").classList.remove("error");
+  byId("mod-upload-label").textContent = label || `Uploading… ${percent}%`;
+  return percent;
+}
+
+function showModUploadError(message, keepProgress = false) {
+  if (!keepProgress) byId("mod-upload-progress").classList.add("hidden");
+  byId("mod-upload-label").classList.add("error");
+  byId("mod-upload-label").textContent = message;
+}
+
+function clearModUploadStatus() {
+  byId("mod-upload-progress").classList.add("hidden");
+  byId("mod-upload-progress-bar").style.width = "0";
+  byId("mod-upload-label").classList.remove("error");
+  byId("mod-upload-label").textContent = "";
+}
+
+async function startModUpload(file) {
+  let response;
+  try {
+    response = await fetch("/api/mods/upload/start", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Accept: "application/json" },
+      body: JSON.stringify({ filename: file.name, size: file.size, last_modified: file.lastModified }),
+    });
+  } catch {
+    throw new ModUploadError("network error");
+  }
+  const body = parseUploadResponse(await response.text());
+  if (!response.ok) throw new ModUploadError(body.error || `HTTP ${response.status}`, response.status);
+  return body;
+}
+
+function uploadModChunk(file, session, offset) {
   return new Promise((resolve, reject) => {
+    const end = Math.min(offset + session.chunk_size, file.size);
+    const chunk = file.slice(offset, end);
     const request = new XMLHttpRequest();
-    request.open("POST", `/api/mods/upload?filename=${encodeURIComponent(file.name)}`);
+    request.open("POST", `/api/mods/upload/chunk?upload_id=${encodeURIComponent(session.upload_id)}&offset=${offset}`);
     request.setRequestHeader("Content-Type", "application/octet-stream");
     request.upload.addEventListener("progress", (event) => {
       if (!event.lengthComputable) return;
-      const percent = Math.round((event.loaded / event.total) * 100);
-      byId("mod-upload-progress-bar").style.width = `${percent}%`;
-      byId("mod-upload-label").textContent = `Uploading… ${percent}%`;
+      setModUploadProgress(offset + event.loaded, file.size);
+    });
+    request.upload.addEventListener("load", () => {
+      if (end === file.size) setModUploadProgress(file.size, file.size, "Checking mod…");
     });
     request.addEventListener("load", () => {
-      let body = {};
-      try {
-        body = JSON.parse(request.responseText || "{}");
-      } catch {
-        body = {};
-      }
+      const body = parseUploadResponse(request.responseText);
       if (request.status >= 200 && request.status < 300) resolve(body);
-      else reject(new Error(body.error || `HTTP ${request.status}`));
+      else if (request.status === 413) reject(new ModUploadError(MOD_UPLOAD_PROXY_LIMIT_MESSAGE, 413));
+      else reject(new ModUploadError(body.error || `HTTP ${request.status}`, request.status));
     });
-    request.addEventListener("error", () => reject(new Error("network error")));
-    request.addEventListener("abort", () => reject(new Error("upload aborted")));
-    request.send(file);
+    request.addEventListener("error", () => reject(new ModUploadError("network error")));
+    request.addEventListener("abort", () => reject(new ModUploadError("upload aborted")));
+    request.send(chunk);
   });
+}
+
+async function confirmedModUploadOffset(uploadId, fallback) {
+  try {
+    const response = await fetch(`/api/mods/upload/status?upload_id=${encodeURIComponent(uploadId)}`, {
+      headers: { Accept: "application/json" },
+    });
+    if (!response.ok) return { offset: fallback, available: false };
+    const body = parseUploadResponse(await response.text());
+    return {
+      offset: Number.isSafeInteger(body.offset) ? body.offset : fallback,
+      available: Number.isSafeInteger(body.offset),
+    };
+  } catch {
+    return { offset: fallback, available: false };
+  }
+}
+
+async function uploadModRequest(file) {
+  const session = await startModUpload(file);
+  if (session.complete) return session;
+  let offset = Number(session.offset) || 0;
+  const resumed = offset > 0;
+  const percent = setModUploadProgress(offset, file.size);
+  if (resumed) byId("mod-upload-label").textContent = `Resuming upload at ${percent}%…`;
+
+  while (offset < file.size) {
+    try {
+      const result = await uploadModChunk(file, session, offset);
+      const nextOffset = Number(result.offset);
+      if (!Number.isSafeInteger(nextOffset) || nextOffset <= offset || nextOffset > file.size) {
+        throw new ModUploadError("server returned an invalid upload offset");
+      }
+      offset = nextOffset;
+      if (result.complete) return result;
+      setModUploadProgress(offset, file.size);
+    } catch (error) {
+      const failure = error instanceof ModUploadError ? error : new ModUploadError(String(error));
+      failure.uploadId = session.upload_id;
+      const status = await confirmedModUploadOffset(session.upload_id, offset);
+      failure.confirmedOffset = status.offset;
+      failure.sessionAvailable = status.available;
+      failure.totalSize = file.size;
+      throw failure;
+    }
+  }
+  throw new ModUploadError("upload ended before the mod was installed");
 }
 
 async function modServerIsRunning() {
@@ -1027,6 +1133,7 @@ async function uploadMod() {
   const file = input.files?.[0];
   if (!file || modMutationActive) return;
   modMutationActive = true;
+  let keepUploadStatus = false;
   updateModControls();
   renderMods();
   try {
@@ -1041,9 +1148,8 @@ async function uploadMod() {
       return;
     }
     if (!(await stopServerForModChange())) return;
-    byId("mod-upload-progress").classList.remove("hidden");
-    byId("mod-upload-progress-bar").style.width = "0";
-    byId("mod-upload-label").textContent = "Uploading… 0%";
+    clearModUploadStatus();
+    setModUploadProgress(0, file.size);
     await uploadModRequest(file);
     toast(`${file.name} installed`);
     input.value = "";
@@ -1051,11 +1157,35 @@ async function uploadMod() {
     await refreshMods();
     await refreshCarCatalog();
   } catch (error) {
-    toast(`Install failed: ${error.message || error}`);
+    await refreshMods();
+    const installed = MODS.mods.some((mod) => mod.filename.toLowerCase() === file.name.toLowerCase());
+    if (installed) {
+      toast(`${file.name} installed`);
+      input.value = "";
+      byId("mod-file-name").textContent = "Choose a .kspkg file…";
+      await refreshCarCatalog();
+    } else {
+      const status = Number(error.status) || 0;
+      const confirmed = Number(error.confirmedOffset) || 0;
+      const total = Number(error.totalSize) || file.size;
+      const resumableMessage = resumableUploadError(status, confirmed, total, error.sessionAvailable);
+      if (status === 413) {
+        setModUploadProgress(confirmed, total);
+        showModUploadError(resumableMessage, true);
+        keepUploadStatus = true;
+      } else if (resumableMessage && error.uploadId) {
+        setModUploadProgress(confirmed, total);
+        showModUploadError(resumableMessage, true);
+        keepUploadStatus = true;
+      } else {
+        showModUploadError(`Install failed: ${error.message || error}`);
+        keepUploadStatus = true;
+      }
+      toast(`Install failed: ${error.message || error}`);
+    }
   } finally {
     modMutationActive = false;
-    byId("mod-upload-progress").classList.add("hidden");
-    byId("mod-upload-label").textContent = "";
+    if (!keepUploadStatus) clearModUploadStatus();
     updateModControls();
     renderMods();
   }
@@ -1573,6 +1703,7 @@ function wireControls() {
   byId("mod-file").addEventListener("change", () => {
     const file = byId("mod-file").files?.[0];
     byId("mod-file-name").textContent = file ? file.name : "Choose a .kspkg file…";
+    clearModUploadStatus();
     updateModControls();
   });
   byId("btn-mod-upload").addEventListener("click", uploadMod);

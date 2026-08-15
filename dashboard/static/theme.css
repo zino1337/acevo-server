@@ -685,6 +685,10 @@ md-outlined-select {
   margin-top: 4px;
 }
 
+.mod-upload-label.error {
+  color: var(--md-sys-color-error);
+}
+
 .switch-row {
   display: flex;
   align-items: center;

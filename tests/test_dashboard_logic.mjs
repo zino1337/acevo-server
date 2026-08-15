@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  MOD_UPLOAD_PROXY_LIMIT_MESSAGE,
   formatLapDelta,
   formatLapTime,
   hasActiveCategoryFilters,
@@ -9,8 +10,10 @@ import {
   matchesPiFilter,
   parseMobileSectionState,
   preferredTrack,
+  resumableUploadError,
   selectedByCategoryFilters,
   trackIdentity,
+  uploadPercent,
 } from "../dashboard/static/dashboard_logic.mjs";
 
 const practice = [
@@ -88,4 +91,21 @@ test("lap deltas are omitted for the fastest and invalid laps", () => {
   assert.equal(formatLapDelta(98321, 97210), "+1.111");
   assert.equal(formatLapDelta(97210, 97210), "");
   assert.equal(formatLapDelta(null, 97210), "");
+});
+
+test("mod upload progress is bounded and proxy errors are actionable", () => {
+  assert.equal(uploadPercent(3, 8), 38);
+  assert.equal(uploadPercent(9, 8), 100);
+  assert.equal(uploadPercent(1, 0), 0);
+  assert.equal(resumableUploadError(413, 0, 100), MOD_UPLOAD_PROXY_LIMIT_MESSAGE);
+  assert.equal(
+    resumableUploadError(504, 30, 100),
+    "Upload paused at 30%. Select the same file and click Install to resume.",
+  );
+  assert.equal(
+    resumableUploadError(409, 30, 100, true),
+    "Upload paused at 30%. Select the same file and click Install to resume.",
+  );
+  assert.equal(resumableUploadError(409, 30, 100, false), "");
+  assert.equal(resumableUploadError(400, 30, 100), "");
 });
