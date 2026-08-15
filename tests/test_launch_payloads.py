@@ -500,6 +500,79 @@ class LaunchPayloadTests(unittest.TestCase):
         self.assertEqual(resolved(report, "SERVER_NAME")["source"], "env")
         self.assertEqual(resolved(report, "EVENT_CARS")["source"], "env")
 
+    def test_dashboard_priority_overrides_env_and_related_car_filters(self):
+        document = launcher_document()
+        document["Sessions"]["PracticeSession"]["Length"] = 3600
+        with tempfile.TemporaryDirectory() as tmp:
+            path = write_launcher_json(Path(tmp), document)
+            server_doc, season_doc, warnings, report = launch_payloads.build_documents_with_report(
+                {
+                    "SERVER_LAUNCHER_JSON": str(path),
+                    "SERVER_NAME": "ENV Server",
+                    "EVENT_TYPE": "Practice",
+                    "EVENT_CARS": "Ferrari_F2004",
+                    "EVENT_CAR_CATEGORY": "all",
+                    "EVENT_BAN_CARS": "Abarth_695_Biposto",
+                    "PRACTICE_DURATION_MINUTES": "1",
+                },
+                config_priority="dashboard",
+            )
+
+        self.assertEqual(warnings, [])
+        self.assertEqual(server_doc["server_name"], "Windows Tool Server")
+        self.assertEqual(season_doc["game_type"], "GameModeType_RACE_WEEKEND")
+        self.assertEqual(season_doc["game_config"]["practice_duration"], 3600)
+        self.assertEqual(selected_car_names(server_doc), {"preset_695b_mech_1", "ks_caterham_acmd_mech_1"})
+        self.assertEqual(resolved(report, "SERVER_NAME")["source"], "json")
+        self.assertEqual(resolved(report, "EVENT_CARS")["source"], "json")
+        self.assertEqual(resolved(report, "EVENT_CAR_CATEGORY")["source"], "unresolved")
+
+    def test_saved_priority_marker_controls_default_precedence(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            path = write_launcher_json(root, launcher_document())
+            (root / launch_payloads.CONFIG_STATE_FILENAME).write_text(
+                json.dumps({"config_source": "dashboard"}), encoding="utf-8"
+            )
+            server_doc, _season_doc, warnings, report = launch_payloads.build_documents_with_report(
+                {"SERVER_LAUNCHER_JSON": str(path), "SERVER_NAME": "ENV Server"}
+            )
+
+        self.assertEqual(warnings, [])
+        self.assertEqual(server_doc["server_name"], "Windows Tool Server")
+        self.assertEqual(report["config_priority"], "dashboard")
+
+    def test_dashboard_priority_does_not_leak_env_car_filters_when_none_are_selected(self):
+        document = launcher_document()
+        for car in document["Event"]["Cars"]:
+            car["IsSelected"] = False
+        with tempfile.TemporaryDirectory() as tmp:
+            path = write_launcher_json(Path(tmp), document)
+            server_doc, _season_doc, warnings, report = launch_payloads.build_documents_with_report(
+                {"SERVER_LAUNCHER_JSON": str(path), "EVENT_CARS": "Ferrari_F2004"},
+                config_priority="dashboard",
+            )
+
+        self.assertEqual(warnings, [])
+        self.assertGreater(len(selected_car_names(server_doc)), 1)
+        self.assertNotEqual(selected_car_names(server_doc), {"preset_f2004_mech_1"})
+        self.assertEqual(resolved(report, "EVENT_CARS")["source"], "default")
+
+    def test_missing_dashboard_config_falls_back_to_env_with_warning(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            path = root / "missing.json"
+            (root / launch_payloads.CONFIG_STATE_FILENAME).write_text(
+                json.dumps({"config_source": "dashboard"}), encoding="utf-8"
+            )
+            server_doc, _season_doc, warnings, report = launch_payloads.build_documents_with_report(
+                {"SERVER_LAUNCHER_JSON": str(path), "SERVER_NAME": "ENV Server"}
+            )
+
+        self.assertEqual(server_doc["server_name"], "ENV Server")
+        self.assertEqual(report["config_priority"], "env")
+        self.assertTrue(any("Dashboard config is unavailable" in warning for warning in warnings))
+
     def test_invalid_server_launcher_json_warns_and_uses_defaults(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = write_launcher_json(Path(tmp), "{")

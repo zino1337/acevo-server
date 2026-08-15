@@ -110,6 +110,7 @@ def _official_ids(cfg: dict) -> set[str]:
 def _serialize_car(car: kspkg.ModCar) -> dict:
     return {
         "display_name": car.display_name,
+        "runtime_name": car.runtime_name,
         "variants": [
             {"preset_id": variant.preset_id, "display_name": variant.display_name} for variant in car.variants
         ],

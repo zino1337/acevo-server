@@ -50,6 +50,7 @@ class ModVariant:
 class ModCar:
     display_name: str
     variants: tuple[ModVariant, ...]
+    runtime_name: str = ""
 
 
 @dataclass(frozen=True)
@@ -76,6 +77,7 @@ class ModInventoryItem:
 
 _cache_lock = threading.Lock()
 _package_cache: dict[tuple[str, int, int], ModPackage] = {}
+_runtime_name_cache: dict[tuple[str, int, int], dict[str, str]] = {}
 
 
 def _xor(data: bytes) -> bytes:
@@ -215,6 +217,10 @@ def _car_root(internal_path: str) -> str:
     return parent.lower()
 
 
+def _runtime_name(root: str) -> str:
+    return PureWindowsPath(root).name
+
+
 def _fallback_car_name(root: str, package_stem: str) -> str:
     tail = package_stem or PureWindowsPath(root).name
     return tail.replace("_", " ").strip() or package_stem
@@ -267,7 +273,7 @@ def inspect_package(path: Path) -> ModPackage:
         for preset_id, variant_name in sorted(raw_variants):
             display_name = f"{car_name} - {variant_name}" if multiple_variants else car_name
             rendered.append(ModVariant(preset_id=preset_id, display_name=display_name))
-        cars.append(ModCar(display_name=car_name, variants=tuple(rendered)))
+        cars.append(ModCar(display_name=car_name, variants=tuple(rendered), runtime_name=_runtime_name(root)))
 
     return ModPackage(filename=path.name, size=path.stat().st_size, cars=tuple(cars))
 
@@ -292,10 +298,35 @@ def clear_cache(path: Path | None = None) -> None:
     with _cache_lock:
         if path is None:
             _package_cache.clear()
+            _runtime_name_cache.clear()
             return
         resolved = str(path.resolve())
         for key in [candidate for candidate in _package_cache if candidate[0] == resolved]:
             _package_cache.pop(key, None)
+        for key in [candidate for candidate in _runtime_name_cache if candidate[0] == resolved]:
+            _runtime_name_cache.pop(key, None)
+
+
+def runtime_names_by_preset(path: Path) -> dict[str, str]:
+    """Map mechanical preset IDs to AC EVO runtime car names using only the package table."""
+    stat = path.stat()
+    key = (str(path.resolve()), stat.st_size, stat.st_mtime_ns)
+    with _cache_lock:
+        cached = _runtime_name_cache.get(key)
+    if cached is not None:
+        return dict(cached)
+
+    mapping = {
+        PureWindowsPath(entry.path).stem: _runtime_name(_car_root(entry.path))
+        for entry in read_entries(path)
+        if entry.path.lower().endswith(".mechanicalcarpreset")
+    }
+    with _cache_lock:
+        stale = [candidate for candidate in _runtime_name_cache if candidate[0] == key[0] and candidate != key]
+        for candidate in stale:
+            _runtime_name_cache.pop(candidate, None)
+        _runtime_name_cache[key] = mapping
+    return dict(mapping)
 
 
 def scan_mods(mods_dir: Path | None = None, official_ids: set[str] | None = None) -> tuple[ModInventoryItem, ...]:
@@ -376,6 +407,7 @@ def mod_car_entries(inventory: tuple[ModInventoryItem, ...]) -> list[dict]:
                         "property_3": None,
                         "is_mod": True,
                         "mod_file": package.filename,
+                        "runtime_name": car.runtime_name,
                     }
                 )
     return cars

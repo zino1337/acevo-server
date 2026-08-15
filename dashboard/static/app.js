@@ -7,6 +7,7 @@ import {
   MOD_UPLOAD_PROXY_LIMIT_MESSAGE,
   formatLapDelta,
   formatLapTime,
+  liveCarDisplayName,
   matchesCategoryFilters,
   matchesPiFilter,
   parseMobileSectionState,
@@ -52,6 +53,7 @@ let logTailTimer = null;
 let liveTimer = null;
 let liveRequestPending = false;
 let activeView = "config";
+let configSource = "env";
 
 const LOG_TAIL_DEFAULT = 200;
 const LOG_TAIL_MAX = 50000;
@@ -181,11 +183,12 @@ function formatBytes(value) {
   return `${amount.toFixed(amount >= 10 ? 1 : 2)} ${unit}`;
 }
 
-function confirmDialog(message, headline = "Confirm") {
+function confirmDialog(message, headline = "Confirm", confirmLabel = "Confirm") {
   return new Promise((resolve) => {
     const dialog = byId("confirm-dialog");
     byId("confirm-message").textContent = message;
     byId("confirm-headline").textContent = headline;
+    byId("confirm-ok").textContent = confirmLabel;
     const cleanup = (result) => {
       byId("confirm-ok").onclick = null;
       byId("confirm-cancel").onclick = null;
@@ -1350,6 +1353,57 @@ async function deleteProfile(name) {
   loadProfiles();
 }
 
+// --- configuration source -------------------------------------------------------------------
+
+function updateConfigSource(info = {}) {
+  if (info.config_source) configSource = info.config_source;
+  const panel = byId("config-priority");
+  const text = byId("config-priority-text");
+  const button = byId("btn-config-priority");
+  const warning = info.source_warning || "";
+  const switchAvailable = !!info.source_switch_available;
+  panel.classList.toggle("hidden", !warning && !switchAvailable);
+  panel.classList.toggle("warning", !!warning);
+  text.textContent = warning || `Configuration priority: ${configSource === "dashboard" ? "Dashboard" : "Environment"}`;
+  button.classList.toggle("hidden", !switchAvailable);
+  button.textContent = configSource === "dashboard" ? "Use ENV priority" : "Use saved Dashboard config";
+}
+
+async function reloadEffectiveConfig() {
+  const cfg = await api.get("/api/config");
+  loadForm(cfg.form);
+  byId("config-path").textContent = cfg.config_path || "—";
+  updateConfigSource(cfg);
+  renderAll();
+  runValidate();
+}
+
+async function switchConfigSource() {
+  const target = configSource === "dashboard" ? "env" : "dashboard";
+  const message =
+    target === "env"
+      ? "Use ENV priority? Your saved Dashboard configuration will be kept. A running server will restart."
+      : "Use the saved Dashboard configuration? A running server will restart.";
+  const action = target === "env" ? "Use ENV priority" : "Use Dashboard config";
+  if (!(await confirmDialog(message, "Change configuration priority", action))) return;
+  const button = byId("btn-config-priority");
+  button.disabled = true;
+  try {
+    const result = await api.post("/api/config/source", { source: target });
+    if (result.error) {
+      toast("Priority change failed: " + result.error);
+      return;
+    }
+    await reloadEffectiveConfig();
+    toast(result.restarted ? "Priority changed — server restarting." : "Configuration priority changed.");
+    refreshStatus();
+    refreshLogsSoon();
+    refreshLiveSoon();
+  } finally {
+    button.disabled = false;
+  }
+}
+
 // --- server control + status ----------------------------------------------------------------
 
 function statusLabel(s) {
@@ -1408,30 +1462,38 @@ async function doSave() {
   } else {
     toast("Saved to " + r.path);
     renderPreview(r);
+    updateConfigSource(r);
   }
   return r;
 }
 
 async function doSaveApply() {
-  const saved = await doSave();
-  if (!saved || saved.error) return;
-  if (!(await confirmDialog("Config saved. Restart the server now to apply it?", "Save & Apply"))) {
-    toast("Saved (not yet applied).");
+  const form = buildForm();
+  const validation = await api.post("/api/validate", { form });
+  if (validation.error) {
+    toast("Validation failed: " + validation.error);
     return;
   }
-  const r = await api.post("/api/server/restart");
-  toast(r.ok ? "Applied — server restarting." : "Restart failed: " + (r.error || r.stderr || ""));
+  renderPreview(validation);
+  const conflicts = validation.env_conflicts || [];
+  const message = conflicts.length
+    ? `Environment variables conflict with this configuration: ${conflicts.join(", ")}. Save & Apply will use the Dashboard values. We recommend removing these variables from your deployment.`
+    : "Save this configuration and use Dashboard priority? A running server will restart.";
+  if (!(await confirmDialog(message, "Save & Apply", "Save & Apply"))) return;
+  const r = await api.post("/api/server/apply", { form });
+  if (r.error) {
+    toast("Apply failed: " + r.error);
+  } else {
+    toast(r.restarted ? "Applied — server restarting." : "Applied. Dashboard priority is active.");
+    renderPreview(r);
+    updateConfigSource(r);
+  }
   refreshStatus();
   refreshLogsSoon();
   refreshLiveSoon();
 }
 
 // --- live session ---------------------------------------------------------------------------
-
-function liveCarLabel(internalName) {
-  const car = META.cars.find((entry) => entry.internal_name === internalName);
-  return car ? car.display_name : internalName || "Unknown car";
-}
 
 function liveMetric(className, label, value) {
   const cell = document.createElement("span");
@@ -1461,8 +1523,8 @@ function renderLiveDriver(driver, fastest) {
 
   const car = document.createElement("span");
   car.className = "live-car";
-  car.textContent = liveCarLabel(driver.car);
-  car.title = car.textContent;
+  car.textContent = liveCarDisplayName(META.cars, driver.car);
+  car.title = driver.car || car.textContent;
 
   const laps = liveMetric("live-laps", "Laps", String(driver.laps || 0));
   const best = liveMetric("live-best", "Best", formatLapTime(driver.best_lap_ms));
@@ -1689,6 +1751,7 @@ function wireControls() {
   byId("btn-restart").addEventListener("click", doRestart);
   byId("btn-save").addEventListener("click", doSave);
   byId("btn-save-apply").addEventListener("click", doSaveApply);
+  byId("btn-config-priority").addEventListener("click", switchConfigSource);
   byId("btn-profile-save").addEventListener("click", saveProfile);
   byId("tab-config").addEventListener("click", () => setActiveView("config"));
   byId("tab-mods").addEventListener("click", () => setActiveView("mods"));
@@ -1722,6 +1785,7 @@ async function init() {
   }
   loadForm(cfg.form);
   byId("config-path").textContent = cfg.config_path || "—";
+  updateConfigSource(cfg);
 
   renderAll();
   wireControls();

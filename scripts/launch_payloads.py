@@ -25,6 +25,14 @@ except ImportError:  # Direct ``python scripts/launch_payloads.py`` execution.
 TRUE_VALUES = {"1", "true", "yes", "y", "on"}
 FALSE_VALUES = {"0", "false", "no", "n", "off"}
 DEFAULT_SERVER_LAUNCHER_JSON = "/data/server_launcher.json"
+CONFIG_STATE_FILENAME = "dashboard_config_state.json"
+CONFIG_PRIORITIES = {"env", "dashboard"}
+CAR_FILTER_KEYS = {
+    "EVENT_CARS",
+    "EVENT_CAR_CATEGORY",
+    "EVENT_BAN_CARS",
+    "EVENT_BAN_CAR_CATEGORY",
+}
 SESSION_PREFIXES = ("PRACTICE", "QUALIFY", "WARMUP", "RACE")
 SESSION_NAMES = {
     "PRACTICE": "practice",
@@ -500,7 +508,26 @@ def map_launcher_sessions(launcher: LauncherImport, sessions: dict) -> None:
         launcher.duration_seconds[prefix] = length_int
 
 
-def load_server_launcher_json(env: dict[str, str], cfg: dict) -> LauncherImport:
+def config_state_path(env: dict[str, str]) -> Path:
+    launcher_path = Path(str(env.get("SERVER_LAUNCHER_JSON", "")).strip() or DEFAULT_SERVER_LAUNCHER_JSON)
+    return launcher_path.parent / CONFIG_STATE_FILENAME
+
+
+def requested_config_priority(env: dict[str, str]) -> tuple[str, str]:
+    state_path = config_state_path(env)
+    try:
+        state = _read_json(state_path)
+    except FileNotFoundError:
+        return "env", "no saved priority; using env"
+    except (OSError, ValueError) as exc:
+        return "env", f"invalid priority state {state_path}: {exc}; using env"
+    source = str(state.get("config_source", "")).strip().lower() if isinstance(state, dict) else ""
+    if source not in CONFIG_PRIORITIES:
+        return "env", f"invalid priority state {state_path}; using env"
+    return source, f"loaded from {state_path}"
+
+
+def load_server_launcher_json(env: dict[str, str], cfg: dict, priority: str = "env") -> LauncherImport:
     explicit_path = str(env.get("SERVER_LAUNCHER_JSON", "")).strip()
     path = Path(explicit_path or DEFAULT_SERVER_LAUNCHER_JSON)
     launcher = LauncherImport(path=str(path), source="env" if explicit_path else "default")
@@ -565,7 +592,7 @@ def load_server_launcher_json(env: dict[str, str], cfg: dict) -> LauncherImport:
         }
         for source_key, target_key in mapping.items():
             append_if_present(launcher.values, target_key, event, source_key)
-        if not any(key in env for key in ("EVENT_CARS", "EVENT_CAR_CATEGORY")):
+        if priority == "dashboard" or not any(key in env for key in ("EVENT_CARS", "EVENT_CAR_CATEGORY")):
             map_launcher_cars(launcher, cfg, event)
 
     sessions = document.get("Sessions")
@@ -607,6 +634,13 @@ def _official_cars(bundled: list[dict]) -> list[dict]:
         if internal_name not in merged:
             order.append(internal_name)
         merged[internal_name] = {**merged.get(internal_name, {}), **car, "is_mod": False}
+    try:
+        runtime_names = kspkg.runtime_names_by_preset(install_dir / "content.kspkg")
+    except (OSError, kspkg.KspkgError):
+        runtime_names = {}
+    for internal_name, runtime_name in runtime_names.items():
+        if internal_name in merged:
+            merged[internal_name]["runtime_name"] = runtime_name
     return [merged[internal_name] for internal_name in order]
 
 
@@ -688,9 +722,16 @@ def load_config() -> dict:
 
 
 class EnvState:
-    def __init__(self, env: dict[str, str], launcher: LauncherImport, sensitive_keys: set[str]) -> None:
+    def __init__(
+        self,
+        env: dict[str, str],
+        launcher: LauncherImport,
+        sensitive_keys: set[str],
+        priority: str = "env",
+    ) -> None:
         self.env = env
         self.launcher = launcher
+        self.priority = priority
         self.json_values = launcher.values
         self.launcher_car_options = launcher.car_options
         self.launcher_duration_seconds = launcher.duration_seconds
@@ -707,6 +748,10 @@ class EnvState:
         self.resolved[key] = {"value": value, "source": source, "note": note}
 
     def source_for(self, key: str) -> str:
+        if self.priority == "dashboard" and self.launcher.loaded and key in CAR_FILTER_KEYS:
+            return "json" if key == "EVENT_CARS" and key in self.json_values else "default"
+        if self.priority == "dashboard" and key in self.json_values:
+            return "json"
         if key in self.env:
             return "env"
         if key in self.json_values:
@@ -717,9 +762,10 @@ class EnvState:
         return key in self.env or key in self.json_values
 
     def _raw(self, key: str) -> str:
-        if key in self.env:
+        source = self.source_for(key)
+        if source == "env":
             return str(self.env.get(key, ""))
-        if key in self.json_values:
+        if source == "json":
             return str(self.json_values.get(key, ""))
         return ""
 
@@ -1080,7 +1126,11 @@ def resolve_sessions(state: EnvState, cfg: dict, event_type: str, race_duration_
                     session["DURATION_SECONDS"] = 0
                     state.set(key, value, "ignored_by_duration_type", "ignored because RACE_DURATION_TYPE=Laps")
                     continue
-                if field == "DURATION_MINUTES" and key not in state.env and prefix in state.launcher_duration_seconds:
+                if (
+                    field == "DURATION_MINUTES"
+                    and state.source_for(key) == "json"
+                    and prefix in state.launcher_duration_seconds
+                ):
                     seconds = state.launcher_duration_seconds[prefix]
                     minutes = seconds / 60
                     session[field] = minutes
@@ -1280,6 +1330,7 @@ def build_report(cfg: dict, state: EnvState, server_doc: dict, season_doc: dict)
     event = season_doc["event"]
 
     return {
+        "config_priority": state.priority,
         "resolved_env": resolved_env,
         "warnings": list(state.warnings),
         "server_summary": {
@@ -1305,10 +1356,21 @@ def build_report(cfg: dict, state: EnvState, server_doc: dict, season_doc: dict)
     }
 
 
-def build_documents_with_report(env: dict[str, str]) -> tuple[dict, dict, list[str], dict]:
+def build_documents_with_report(
+    env: dict[str, str], config_priority: str | None = None
+) -> tuple[dict, dict, list[str], dict]:
     cfg = load_config()
-    launcher = load_server_launcher_json(env, cfg)
-    state = EnvState(env, launcher, set(cfg["runtime"]["sensitive_env_keys"]))
+    if config_priority in CONFIG_PRIORITIES:
+        requested_priority, priority_note = config_priority, "explicit call override"
+    else:
+        requested_priority, priority_note = requested_config_priority(env)
+    launcher = load_server_launcher_json(env, cfg, requested_priority)
+    effective_priority = requested_priority if requested_priority != "dashboard" or launcher.loaded else "env"
+    state = EnvState(env, launcher, set(cfg["runtime"]["sensitive_env_keys"]), effective_priority)
+    if priority_note.startswith("invalid"):
+        state.warn(f"Configuration priority: {priority_note}.")
+    if requested_priority == "dashboard" and effective_priority == "env":
+        state.warn("Configuration priority: Dashboard config is unavailable; using ENV priority.")
     prepare_state(state, cfg)
 
     event_type = state.enum("EVENT_TYPE", cfg["mappings"]["event_type"], cfg["event_defaults"]["type"])

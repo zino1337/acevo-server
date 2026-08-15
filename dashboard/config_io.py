@@ -15,6 +15,7 @@ import json
 import os
 import re
 import tempfile
+import threading
 from pathlib import Path
 
 from scripts import launch_payloads as lp
@@ -22,6 +23,19 @@ from scripts import launch_payloads as lp
 from . import metadata
 
 _FALLBACK_TRACK = "Nurburgring|Touristenfahrten|Touristenfahrten Time Attack|19300"
+_NON_DASHBOARD_ENV_KEYS = {"SERVER_LAUNCHER_JSON", "ACEVO_SERVER_INSTALL_DIR"}
+_CAR_FILTER_ENV_KEYS = {
+    "EVENT_CARS",
+    "EVENT_CAR_CATEGORY",
+    "EVENT_BAN_CARS",
+    "EVENT_BAN_CAR_CATEGORY",
+}
+_PASSWORD_FIELDS = {
+    "SERVER_DRIVER_PASSWORD": "driver_password",
+    "SERVER_SPECTATOR_PASSWORD": "spectator_password",
+    "SERVER_ADMIN_PASSWORD": "admin_password",
+}
+_config_write_lock = threading.RLock()
 
 
 # --- value coercion -------------------------------------------------------------------------
@@ -519,32 +533,230 @@ def effective_runtime_form(
 # --- validation + persistence ---------------------------------------------------------------
 
 
-def _validate_doc(doc: dict) -> dict:
+def _runtime_env(env: dict | None, config_path: str | os.PathLike | None = None) -> dict[str, str]:
+    runtime_env = {str(key): str(value) for key, value in (os.environ if env is None else env).items()}
+    if config_path is not None:
+        runtime_env["SERVER_LAUNCHER_JSON"] = str(config_path)
+    return runtime_env
+
+
+def dashboard_managed_env_keys(cfg: dict | None = None) -> tuple[str, ...]:
+    cfg = cfg or lp.load_config()
+    external = set(cfg["runtime"]["external_runtime_env"])
+    return tuple(
+        key for key in cfg["supported_key_order"] if key not in _NON_DASHBOARD_ENV_KEYS and key not in external
+    )
+
+
+def _saved_document_available(path: str | os.PathLike) -> bool:
+    try:
+        doc = json.loads(Path(path).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return False
+    return isinstance(doc, dict)
+
+
+def config_source_info(
+    path: str | os.PathLike,
+    env: dict | None = None,
+    cfg: dict | None = None,
+) -> dict:
+    cfg = cfg or lp.load_config()
+    runtime_env = _runtime_env(env, path)
+    requested, note = lp.requested_config_priority(runtime_env)
+    dashboard_available = _saved_document_available(path)
+    effective = requested if requested != "dashboard" or dashboard_available else "env"
+    warning = ""
+    if note.startswith("invalid"):
+        warning = note
+    if requested == "dashboard" and not dashboard_available:
+        warning = "Dashboard configuration is missing or invalid. Environment priority is active."
+    env_keys = sorted(key for key in dashboard_managed_env_keys(cfg) if key in runtime_env)
+    return {
+        "config_source": effective,
+        "environment_available": bool(env_keys),
+        "dashboard_available": dashboard_available,
+        "source_switch_available": bool(env_keys) and dashboard_available,
+        "source_warning": warning,
+    }
+
+
+def _atomic_write_bytes(path: Path, data: bytes) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, temporary = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=path.parent)
+    try:
+        with os.fdopen(fd, "wb") as handle:
+            handle.write(data)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary, path)
+    finally:
+        try:
+            os.remove(temporary)
+        except FileNotFoundError:
+            pass
+
+
+def _atomic_write_json(path: Path, document: dict) -> None:
+    _atomic_write_bytes(path, json.dumps(document, indent=2).encode("utf-8"))
+
+
+def config_state_path(config_path: str | os.PathLike) -> Path:
+    return Path(config_path).parent / lp.CONFIG_STATE_FILENAME
+
+
+def set_config_source(
+    source: str,
+    config_path: str | os.PathLike,
+    env: dict | None = None,
+    cfg: dict | None = None,
+) -> dict:
+    source = _as_str(source).strip().lower()
+    if source not in lp.CONFIG_PRIORITIES:
+        return {"ok": False, "error": "config source must be 'env' or 'dashboard'"}
+    state_path = config_state_path(config_path)
+    with _config_write_lock:
+        if source == "dashboard" and not _saved_document_available(config_path):
+            return {"ok": False, "error": "saved Dashboard configuration is missing or invalid"}
+        _atomic_write_json(state_path, {"config_source": source})
+    return {"ok": True, "state_path": str(state_path), **config_source_info(config_path, env, cfg)}
+
+
+def _build_doc(doc: dict, env: dict | None, priority: str) -> tuple[dict, dict, list[str], dict]:
     fd, tmp = tempfile.mkstemp(suffix=".json", prefix="acevo-dashboard-")
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as handle:
             json.dump(doc, handle)
-        _server, _season, warnings, report = lp.build_documents_with_report({"SERVER_LAUNCHER_JSON": tmp})
+        runtime_env = _runtime_env(env, tmp)
+        return lp.build_documents_with_report(runtime_env, config_priority=priority)
     finally:
         try:
             os.remove(tmp)
         except OSError:
             pass
-    return {"warnings": list(warnings), "report": report, "launcher": doc}
 
 
-def validate(form: dict, cfg: dict | None = None) -> dict:
+def _resolved_by_key(report: dict) -> dict[str, dict]:
+    return {entry["key"]: entry for entry in report.get("resolved_env", [])}
+
+
+def _car_signature(server_doc: dict) -> tuple[tuple, ...]:
+    return tuple(
+        sorted(
+            (
+                car.get("car_name"),
+                int(car.get("ballast", 0)),
+                float(car.get("restrictor", 0.0)),
+            )
+            for car in server_doc.get("allowed_cars_list_full", [])
+        )
+    )
+
+
+def _target_uses_key(key: str, season_doc: dict, desired: dict) -> bool:
+    game_type = season_doc.get("game_type")
+    if game_type == "GameModeType_PRACTICE" and key.startswith(("QUALIFY_", "WARMUP_", "RACE_")):
+        return False
+    entry = desired.get(key, {})
+    return entry.get("source") not in {"ignored_by_event_type", "ignored_by_duration_type", "unresolved"}
+
+
+def _env_conflicts(doc: dict, env: dict | None, cfg: dict) -> list[str]:
+    if env is None:
+        return []
+    runtime_env = _runtime_env(env)
+    managed = dashboard_managed_env_keys(cfg)
+    if not any(key in runtime_env for key in managed):
+        return []
+
+    current_server, current_season, _current_warnings, current_report = _build_doc(doc, runtime_env, "env")
+    desired_server, desired_season, _desired_warnings, desired_report = _build_doc(doc, runtime_env, "dashboard")
+    current = _resolved_by_key(current_report)
+    desired = _resolved_by_key(desired_report)
+    cars_differ = _car_signature(current_server) != _car_signature(desired_server)
+    conflicts: list[str] = []
+
+    for key in managed:
+        if key not in runtime_env:
+            continue
+        current_entry = current.get(key, {})
+        if key in _CAR_FILTER_ENV_KEYS:
+            if cars_differ and (runtime_env.get(key, "").strip() or current_entry.get("source") == "env"):
+                conflicts.append(key)
+            continue
+        if not _target_uses_key(key, desired_season, desired):
+            continue
+        if current_entry.get("source") != "env":
+            continue
+        if key in _PASSWORD_FIELDS:
+            field = _PASSWORD_FIELDS[key]
+            differs = current_server.get(field) != desired_server.get(field)
+        else:
+            differs = current_entry.get("value") != desired.get(key, {}).get("value")
+        if differs:
+            conflicts.append(key)
+    return conflicts
+
+
+def _validate_doc(doc: dict, env: dict | None = None, cfg: dict | None = None) -> dict:
     cfg = cfg or lp.load_config()
-    return _validate_doc(form_to_launcher(form, cfg))
+    _server, _season, warnings, report = _build_doc(doc, {}, "dashboard")
+    return {
+        "warnings": list(warnings),
+        "report": report,
+        "env_conflicts": _env_conflicts(doc, env, cfg),
+    }
 
 
-def save(form: dict, path: str | os.PathLike, cfg: dict | None = None) -> dict:
+def validate(form: dict, cfg: dict | None = None, env: dict | None = None) -> dict:
+    cfg = cfg or lp.load_config()
+    return _validate_doc(form_to_launcher(form, cfg), env, cfg)
+
+
+def save(form: dict, path: str | os.PathLike, cfg: dict | None = None, env: dict | None = None) -> dict:
     cfg = cfg or lp.load_config()
     doc = form_to_launcher(form, cfg)
-    result = _validate_doc(doc)
+    result = _validate_doc(doc, env, cfg)
     target = Path(path)
-    target.parent.mkdir(parents=True, exist_ok=True)
-    target.write_text(json.dumps(doc, indent=2), encoding="utf-8")
+    with _config_write_lock:
+        _atomic_write_json(target, doc)
+    result["ok"] = True
+    result["path"] = str(target)
+    result.update(config_source_info(target, env, cfg))
+    return result
+
+
+def apply(form: dict, path: str | os.PathLike, cfg: dict | None = None, env: dict | None = None) -> dict:
+    cfg = cfg or lp.load_config()
+    doc = form_to_launcher(form, cfg)
+    result = _validate_doc(doc, env, cfg)
+    target = Path(path)
+    with _config_write_lock:
+        previous = target.read_bytes() if target.exists() else None
+        state_target = config_state_path(target)
+        previous_state = state_target.read_bytes() if state_target.exists() else None
+        try:
+            _atomic_write_json(target, doc)
+            source_result = set_config_source("dashboard", target, env, cfg)
+            if not source_result.get("ok"):
+                raise OSError(source_result.get("error", "cannot activate Dashboard priority"))
+        except Exception:
+            if previous is None:
+                try:
+                    target.unlink()
+                except FileNotFoundError:
+                    pass
+            else:
+                _atomic_write_bytes(target, previous)
+            if previous_state is None:
+                try:
+                    state_target.unlink()
+                except FileNotFoundError:
+                    pass
+            else:
+                _atomic_write_bytes(state_target, previous_state)
+            raise
+    result.update(source_result)
     result["path"] = str(target)
     return result
 
@@ -557,6 +769,8 @@ def load_saved(path: str | os.PathLike, cfg: dict | None = None) -> dict | None:
     try:
         doc = json.loads(target.read_text(encoding="utf-8"))
     except (OSError, ValueError):
+        return None
+    if not isinstance(doc, dict):
         return None
     return launcher_to_form(doc, cfg)
 

@@ -95,6 +95,7 @@ def _car_entry(car: dict) -> dict:
         "p3": 0 if is_mod else car.get("property_3", 0),
         "is_mod": is_mod,
         "mod_file": car.get("mod_file", ""),
+        "runtime_name": car.get("runtime_name", ""),
     }
 
 

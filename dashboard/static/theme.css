@@ -177,6 +177,22 @@ body {
   background: #ed6c02;
 }
 
+.config-priority {
+  grid-column: 1 / -1;
+  display: flex;
+  min-height: 40px;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 0 8px;
+  color: var(--md-sys-color-on-surface-variant);
+  font-size: 0.82rem;
+}
+
+.config-priority.warning {
+  color: var(--md-sys-color-error);
+}
+
 /* Layout */
 .layout {
   display: grid;
@@ -336,6 +352,10 @@ md-outlined-select {
   text-transform: uppercase;
 }
 
+.live-driver-head span:nth-child(n + 4) {
+  text-align: right;
+}
+
 .live-driver-name,
 .live-car {
   min-width: 0;
@@ -357,6 +377,7 @@ md-outlined-select {
 .live-laps,
 .live-best,
 .live-last {
+  font-variant-numeric: tabular-nums;
   font-family: "Roboto Mono", ui-monospace, monospace;
   font-size: 0.82rem;
 }
@@ -1249,6 +1270,14 @@ md-outlined-select {
 
   .live-driver-head {
     display: none;
+  }
+
+  .config-priority {
+    align-items: flex-start;
+    flex-direction: column;
+    justify-content: flex-start;
+    gap: 0;
+    padding: 4px 0;
   }
 
   .live-driver-row {

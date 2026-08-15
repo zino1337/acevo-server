@@ -93,6 +93,17 @@ class KspkgParserTests(unittest.TestCase):
                     )
                     self.assertEqual(package.preset_ids, ("preset_test_mech_1",))
                     self.assertEqual(package.cars[0].display_name, "Test Car")
+                    self.assertEqual(package.cars[0].runtime_name, "test_car")
+
+    def test_maps_runtime_car_names_without_extracting_package(self):
+        with tempfile.TemporaryDirectory() as temp:
+            path = write_kspkg(Path(temp) / "runtime.kspkg", ("preset_runtime_mech_1", "preset_runtime_mech_2"))
+            mapping = kspkg.runtime_names_by_preset(path)
+
+        self.assertEqual(
+            mapping,
+            {"preset_runtime_mech_1": "test_car", "preset_runtime_mech_2": "test_car"},
+        )
 
     def test_reads_encrypted_metadata_and_all_variants(self):
         with tempfile.TemporaryDirectory() as temp:
@@ -110,6 +121,7 @@ class KspkgParserTests(unittest.TestCase):
             ("preset_test_mech_1", "preset_test_mech_2", "preset_test_mech_3"),
         )
         self.assertEqual(package.cars[0].variants[1].display_name, "Example GT3 - Variant 2")
+        self.assertEqual(package.cars[0].runtime_name, "test_car")
 
     def test_rejects_broken_packages_and_packages_without_presets(self):
         with tempfile.TemporaryDirectory() as temp:
@@ -181,6 +193,32 @@ class ModCatalogTests(unittest.TestCase):
             {car["car_name"] for car in server_doc["allowed_cars_list_full"]},
             {"preset_gt3rs_mech_1", "preset_new_mod_mech_1"},
         )
+        self.assertEqual(
+            {
+                car["runtime_name"]
+                for car in cars
+                if car["internal_name"] in {"preset_gt3rs_mech_1", "preset_new_mod_mech_1"}
+            },
+            {"test_car"},
+        )
+
+    def test_official_catalog_gets_runtime_names_from_content_package(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            server_dir = root / "server"
+            mods_dir = root / "mods"
+            server_dir.mkdir()
+            mods_dir.mkdir()
+            write_kspkg(server_dir / "content.kspkg", ("preset_695b_mech_1",))
+            with patch.dict(
+                os.environ,
+                {"ACEVO_SERVER_INSTALL_DIR": str(server_dir), "ACEVO_MODS_DIR": str(mods_dir)},
+                clear=False,
+            ):
+                config = launch_payloads.load_config()
+
+        car = next(car for car in config["cars_data"] if car["internal_name"] == "preset_695b_mech_1")
+        self.assertEqual(car["runtime_name"], "test_car")
 
     def test_event_cars_all_includes_only_conflict_free_mods(self):
         with tempfile.TemporaryDirectory() as temp:

@@ -6,6 +6,7 @@ import {
   formatLapDelta,
   formatLapTime,
   hasActiveCategoryFilters,
+  liveCarDisplayName,
   matchesCategoryFilters,
   matchesPiFilter,
   parseMobileSectionState,
@@ -91,6 +92,19 @@ test("lap deltas are omitted for the fastest and invalid laps", () => {
   assert.equal(formatLapDelta(98321, 97210), "+1.111");
   assert.equal(formatLapDelta(97210, 97210), "");
   assert.equal(formatLapDelta(null, 97210), "");
+});
+
+test("live cars resolve presets, runtime models, variants, and unknown IDs", () => {
+  const cars = [
+    { internal_name: "preset_gt2_1", display_name: "KTM X-Bow GT2 - Standard", runtime_name: "ks_ktm_x_bow_gt2" },
+    { internal_name: "preset_gt2_2", display_name: "KTM X-Bow GT2 - Endurance", runtime_name: "ks_ktm_x_bow_gt2" },
+    { internal_name: "preset_mod_1", display_name: "Abarth 1000 TCR", runtime_name: "tc1000" },
+  ];
+  assert.equal(liveCarDisplayName(cars, "preset_gt2_1"), "KTM X-Bow GT2 - Standard");
+  assert.equal(liveCarDisplayName(cars, "ks_ktm_x_bow_gt2"), "KTM X-Bow GT2");
+  assert.equal(liveCarDisplayName(cars, "tc1000"), "Abarth 1000 TCR");
+  assert.equal(liveCarDisplayName(cars, "unknown_runtime"), "unknown_runtime");
+  assert.equal(liveCarDisplayName(cars, ""), "Unknown car");
 });
 
 test("mod upload progress is bounded and proxy errors are actionable", () => {

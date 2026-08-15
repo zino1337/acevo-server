@@ -147,7 +147,8 @@ class DashboardHandler(BaseHTTPRequestHandler):
                 return self._send_json(metadata.build_metadata())
             if route == "/api/config":
                 form = config_io.effective_runtime_form(self.config.config_path, os.environ)
-                return self._send_json({"config_path": str(self.config.config_path), "form": form})
+                source = config_io.config_source_info(self.config.config_path, os.environ)
+                return self._send_json({"config_path": str(self.config.config_path), "form": form, **source})
             if route == "/api/configs":
                 return self._send_json({"profiles": config_io.list_profiles(self.config.config_path)})
             if route == "/api/configs/get":
@@ -241,9 +242,38 @@ class DashboardHandler(BaseHTTPRequestHandler):
                     )
                 )
             if route == "/api/validate":
-                return self._send_json(config_io.validate(form))
+                return self._send_json(config_io.validate(form, env=os.environ))
             if route == "/api/save":
-                return self._send_json(config_io.save(form, self.config.config_path))
+                return self._send_json(config_io.save(form, self.config.config_path, env=os.environ))
+            if route == "/api/server/apply":
+                result = config_io.apply(form, self.config.config_path, env=os.environ)
+                current = server_control.status()
+                if current.get("running"):
+                    restart = server_control.restart()
+                    result["restarted"] = True
+                    result["server"] = restart
+                    if not restart.get("ok"):
+                        result["ok"] = False
+                        result["error"] = restart.get("error", "server restart failed")
+                else:
+                    result["restarted"] = False
+                return self._send_json(result)
+            if route == "/api/config/source":
+                source = body.get("source") if isinstance(body, dict) else None
+                result = config_io.set_config_source(source, self.config.config_path, os.environ)
+                if not result.get("ok"):
+                    return self._send_json(result, 400)
+                current = server_control.status()
+                if current.get("running"):
+                    restart = server_control.restart()
+                    result["restarted"] = True
+                    result["server"] = restart
+                    if not restart.get("ok"):
+                        result["ok"] = False
+                        result["error"] = restart.get("error", "server restart failed")
+                else:
+                    result["restarted"] = False
+                return self._send_json(result)
             if route == "/api/configs/save":
                 return self._send_json(config_io.save_profile(name, form, self.config.config_path))
             if route == "/api/configs/delete":

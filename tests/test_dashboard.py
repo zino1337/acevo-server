@@ -212,6 +212,103 @@ class SaveLoadTests(unittest.TestCase):
         self.assertIsNone(config_io.load_saved(Path("does-not-exist-12345.json")))
 
 
+class ConfigSourceTests(unittest.TestCase):
+    def practice_form(self, server_name="Dashboard Server"):
+        form = config_io.launcher_to_form({})
+        form["server"]["server_name"] = server_name
+        form["event"]["type"] = "GameModeType_PRACTICE"
+        form["event"]["track"] = metadata.build_metadata()["tracks"]["practice"][0]["token"]
+        form["sessions"]["practice"]["length_sec"] = 3600
+        cars = launch_payloads.load_config()["cars_data"]
+        form["cars"] = [{"name": cars[0]["internal_name"], "is_selected": True, "ballast": 0, "restrictor": 0}]
+        return form
+
+    def test_apply_activates_dashboard_and_switching_keeps_saved_config(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "server_launcher.json"
+            env = {"SERVER_NAME": "ENV Server"}
+            saved = config_io.save(self.practice_form(), path, env=env)
+            self.assertEqual(saved["config_source"], "env")
+            self.assertFalse(config_io.config_state_path(path).exists())
+
+            applied = config_io.apply(self.practice_form(), path, env=env)
+            self.assertTrue(applied["ok"])
+            self.assertEqual(applied["config_source"], "dashboard")
+            self.assertEqual(config_io.effective_runtime_form(path, env)["server"]["server_name"], "Dashboard Server")
+
+            env_result = config_io.set_config_source("env", path, env)
+            self.assertEqual(env_result["config_source"], "env")
+            self.assertEqual(config_io.effective_runtime_form(path, env)["server"]["server_name"], "ENV Server")
+            self.assertTrue(path.exists())
+
+            dashboard_result = config_io.set_config_source("dashboard", path, env)
+            self.assertEqual(dashboard_result["config_source"], "dashboard")
+            self.assertEqual(config_io.effective_runtime_form(path, env)["server"]["server_name"], "Dashboard Server")
+
+    def test_conflicts_are_semantic_and_exclude_inactive_sessions_and_secret_values(self):
+        form = self.practice_form()
+        cars = launch_payloads.load_config()["cars_data"]
+        env = {
+            "SERVER_NAME": "ENV Server",
+            "SERVER_ADMIN_PASSWORD": "do-not-return-this-secret",
+            "EVENT_TYPE": "Race_Weekend",
+            "EVENT_CARS": cars[1]["internal_name"],
+            "EVENT_CAR_CATEGORY": "all",
+            "PRACTICE_DURATION_MINUTES": "1",
+            "QUALIFY_DURATION_MINUTES": "1",
+        }
+        result = config_io.validate(form, env=env)
+
+        self.assertEqual(
+            result["env_conflicts"],
+            [
+                "SERVER_NAME",
+                "SERVER_ADMIN_PASSWORD",
+                "EVENT_TYPE",
+                "EVENT_CARS",
+                "EVENT_CAR_CATEGORY",
+                "PRACTICE_DURATION_MINUTES",
+            ],
+        )
+        self.assertNotIn("do-not-return-this-secret", json.dumps(result))
+        self.assertNotIn("launcher", result)
+
+    def test_equal_aliases_and_converted_duration_do_not_conflict(self):
+        form = self.practice_form()
+        selected = next(car["name"] for car in form["cars"] if car["is_selected"])
+        result = config_io.validate(
+            form,
+            env={
+                "SERVER_NAME": "Dashboard Server",
+                "EVENT_TYPE": "Practice",
+                "EVENT_CARS": selected,
+                "PRACTICE_DURATION_MINUTES": "60",
+            },
+        )
+        self.assertEqual(result["env_conflicts"], [])
+
+    def test_invalid_dashboard_state_falls_back_with_visible_warning(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "server_launcher.json"
+            path.write_text("{", encoding="utf-8")
+            config_io.config_state_path(path).write_text(json.dumps({"config_source": "dashboard"}), encoding="utf-8")
+            info = config_io.config_source_info(path, {"SERVER_NAME": "ENV Server"})
+
+        self.assertEqual(info["config_source"], "env")
+        self.assertFalse(info["dashboard_available"])
+        self.assertIn("missing or invalid", info["source_warning"])
+
+    def test_apply_restores_previous_file_when_priority_write_fails(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "server_launcher.json"
+            config_io.save(self.practice_form("Before"), path, env={})
+            before = path.read_bytes()
+            with patch.object(config_io, "set_config_source", return_value={"ok": False, "error": "state failed"}):
+                with self.assertRaisesRegex(OSError, "state failed"):
+                    config_io.apply(self.practice_form("After"), path, env={})
+            self.assertEqual(path.read_bytes(), before)
+
+
 class ProfilesTests(unittest.TestCase):
     def setUp(self):
         self.tmp = Path(tempfile.mkdtemp())
@@ -503,6 +600,17 @@ class BasicAuthTests(unittest.TestCase):
 
 
 class FrontendStaticTests(unittest.TestCase):
+    def test_configuration_priority_flow_is_explicit_and_preflights_apply(self):
+        static = Path(__file__).parents[1] / "dashboard" / "static"
+        html = (static / "index.html").read_text(encoding="utf-8")
+        source = (static / "app.js").read_text(encoding="utf-8")
+        self.assertIn('id="config-priority"', html)
+        self.assertIn("Use saved Dashboard config", source)
+        self.assertIn("Use ENV priority", source)
+        self.assertIn('api.post("/api/validate", { form })', source)
+        self.assertIn('api.post("/api/server/apply", { form })', source)
+        self.assertNotIn("const saved = await doSave();", source)
+
     def test_cars_bulk_selection_uses_master_checkbox_only(self):
         source = (Path(__file__).parents[1] / "dashboard" / "static" / "app.js").read_text(encoding="utf-8")
         self.assertIn("All visible cars", source)
@@ -564,6 +672,9 @@ class FrontendStaticTests(unittest.TestCase):
         self.assertIn("else stopLivePolling()", app_js)
         self.assertIn(".live-driver-row", css)
         self.assertIn("grid-template-columns: 32px repeat(3, minmax(0, 1fr))", css)
+        self.assertIn("liveCarDisplayName", app_js)
+        self.assertIn(".live-driver-head span:nth-child(n + 4)", css)
+        self.assertIn("font-variant-numeric: tabular-nums", css)
 
     def test_mods_tab_is_kspkg_only_and_contains_client_instructions(self):
         static = Path(__file__).parents[1] / "dashboard" / "static"
@@ -621,6 +732,19 @@ class HttpIntegrationTests(unittest.TestCase):
             token = base64.b64encode(auth.encode()).decode()
             req.add_header("Authorization", f"Basic {token}")
         return urllib.request.urlopen(req, timeout=5)
+
+    def post(self, port, path, body, auth=None):
+        headers = {"Content-Type": "application/json"}
+        if auth:
+            token = base64.b64encode(auth.encode()).decode()
+            headers["Authorization"] = f"Basic {token}"
+        request = urllib.request.Request(
+            f"http://127.0.0.1:{port}{path}",
+            data=json.dumps(body).encode(),
+            headers=headers,
+            method="POST",
+        )
+        return urllib.request.urlopen(request, timeout=5)
 
     def test_requires_auth_when_password_set(self):
         httpd, port = self.make("s3cret")
@@ -879,6 +1003,55 @@ class HttpIntegrationTests(unittest.TestCase):
         self.assertEqual(form["sessions"]["race"]["laps"], 8)
         selected = {car["name"] for car in form["cars"] if car["is_selected"]}
         self.assertEqual(selected, {selected_car})
+
+    def test_apply_and_source_routes_switch_priority_and_restart_only_when_running(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            config_path = Path(tmp) / "server_launcher.json"
+            form = ConfigSourceTests().practice_form()
+            httpd, port = self.make("", config_path=config_path)
+            try:
+                with (
+                    patch.dict(os.environ, {"SERVER_NAME": "ENV Server"}, clear=True),
+                    patch.object(server_control, "status", return_value={"running": False, "state": "stopped"}),
+                    patch.object(server_control, "restart") as restart,
+                ):
+                    with self.post(port, "/api/server/apply", {"form": form}) as response:
+                        applied = json.loads(response.read())
+                    self.assertTrue(applied["ok"])
+                    self.assertFalse(applied["restarted"])
+                    restart.assert_not_called()
+
+                with (
+                    patch.dict(os.environ, {"SERVER_NAME": "ENV Server"}, clear=True),
+                    patch.object(server_control, "status", return_value={"running": True, "state": "running"}),
+                    patch.object(server_control, "restart", return_value={"ok": True, "running": True}) as restart,
+                ):
+                    with self.post(port, "/api/config/source", {"source": "env"}) as response:
+                        switched = json.loads(response.read())
+                    self.assertEqual(switched["config_source"], "env")
+                    self.assertTrue(switched["restarted"])
+                    restart.assert_called_once_with()
+            finally:
+                httpd.shutdown()
+                httpd.server_close()
+
+    def test_apply_failure_does_not_restart_server(self):
+        httpd, port = self.make("")
+        try:
+            with (
+                patch.object(config_io, "apply", side_effect=OSError("write failed")),
+                patch.object(server_control, "status") as status,
+                patch.object(server_control, "restart") as restart,
+            ):
+                with self.assertRaises(urllib.error.HTTPError) as ctx:
+                    self.post(port, "/api/server/apply", {"form": {}})
+                self.assertEqual(ctx.exception.code, 500)
+                ctx.exception.close()
+                status.assert_not_called()
+                restart.assert_not_called()
+        finally:
+            httpd.shutdown()
+            httpd.server_close()
 
 
 if __name__ == "__main__":

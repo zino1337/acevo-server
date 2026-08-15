@@ -61,7 +61,9 @@ The Steam volume keeps SteamCMD login state so Steam Guard is not required on ev
 | `/root/.local/share/Steam`   | SteamCMD cache and login state                                              |
 | `/data/server_launcher.json` | Optional official Windows launcher config loaded via `SERVER_LAUNCHER_JSON` |
 
-Environment variables override values from `server_launcher.json`.
+Environment variables have priority by default. **Save & Apply** in the dashboard activates Dashboard priority, so the
+saved `server_launcher.json` values override conflicting configuration variables. When both sources exist, the
+Configuration tab shows the active priority and lets you switch back without deleting either configuration.
 
 ## Ports
 
@@ -129,7 +131,7 @@ Set or adjust in `.env` or in the docker compose file.
 | `DASHBOARD_USER`                                 | `admin`                        | string  | Web dashboard Basic Auth username.                                                                             |
 | `PGID`                                           | `0`                            | integer | Group ID used for mounted volume ownership.                                                                    |
 | `PUID`                                           | `0`                            | integer | User ID used for mounted volume ownership.                                                                     |
-| `SERVER_LAUNCHER_JSON`                           | `/data/server_launcher.json`   | path    | Optional official tool config loaded as base config when present; ENV values override it.                      |
+| `SERVER_LAUNCHER_JSON`                           | `/data/server_launcher.json`   | path    | Optional official tool config. ENV has priority by default; Dashboard **Save & Apply** can switch precedence.  |
 | `SERVER_ADMIN_PASSWORD`                          | empty                          | string  | Admin password.                                                                                                |
 | `SERVER_CYCLE_ENABLED`                           | `true`                         | boolean | Enables session/event cycling when supported by the server.                                                    |
 | `SERVER_DRIVER_PASSWORD`                         | empty                          | string  | Driver password.                                                                                               |

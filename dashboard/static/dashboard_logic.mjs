@@ -67,3 +67,26 @@ export function formatLapDelta(value, fastest) {
   if (!Number.isFinite(value) || !Number.isFinite(fastest) || value <= fastest) return "";
   return `+${((value - fastest) / 1000).toFixed(3)}`;
 }
+
+function commonCarModelName(cars) {
+  const bases = new Set(cars.map((car) => String(car.display_name || "").split(/\s+-\s+/)[0]).filter(Boolean));
+  if (bases.size === 1) return [...bases][0];
+  const names = cars.map((car) => String(car.display_name || "")).filter(Boolean);
+  if (!names.length) return "";
+  let prefix = names[0];
+  for (const name of names.slice(1)) {
+    while (prefix && !name.startsWith(prefix)) prefix = prefix.slice(0, -1);
+  }
+  return prefix.replace(/[\s\-–—:]+$/, "");
+}
+
+export function liveCarDisplayName(cars, internalName) {
+  const raw = String(internalName || "").trim();
+  if (!raw) return "Unknown car";
+  const exact = cars.find((car) => car.internal_name === raw);
+  if (exact) return exact.display_name || raw;
+  const runtimeMatches = cars.filter((car) => car.runtime_name && car.runtime_name === raw);
+  if (runtimeMatches.length === 1) return runtimeMatches[0].display_name || raw;
+  if (runtimeMatches.length > 1) return commonCarModelName(runtimeMatches) || raw;
+  return raw;
+}
