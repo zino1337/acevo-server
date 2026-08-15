@@ -3,16 +3,20 @@ import test from "node:test";
 
 import {
   MOD_UPLOAD_PROXY_LIMIT_MESSAGE,
+  carHasCategory,
+  categoryFilterDefaults,
+  deselectCarsInCategory,
   formatLapDelta,
   formatLapTime,
-  hasActiveCategoryFilters,
   liveCarDisplayName,
+  matchesCarSearch,
   matchesCategoryFilters,
   matchesPiFilter,
   parseMobileSectionState,
+  preferredCarCategory,
   preferredTrack,
   resumableUploadError,
-  selectedByCategoryFilters,
+  setVisibleCarSelection,
   sortCarsByDisplayName,
   trackIdentity,
   uploadPercent,
@@ -40,21 +44,49 @@ test("first valid track is the final fallback", () => {
   assert.equal(preferredTrack(race, practice[1].token, "missing"), race[0].token);
 });
 
-test("category filters are additive across groups", () => {
-  const filters = {
-    types: new Set(),
-    eras: new Set(),
-    engines: new Set(["ev"]),
-    classes: new Set(["gt3"]),
-    mods: false,
+test("all car categories are enabled by default", () => {
+  const categories = {
+    type: [{ value: "road" }, { value: "race" }],
+    era: [{ value: "modern" }, { value: "vintage" }],
+    engine: [{ value: "ice" }, { value: "ev" }],
+    class: [{ value: "gt3" }, { value: "gt4" }],
   };
-  assert.equal(matchesCategoryFilters({ engine: "ice", classes: ["gt3"] }, filters), true);
-  assert.equal(matchesCategoryFilters({ engine: "ev", classes: [] }, filters), true);
-  assert.equal(matchesCategoryFilters({ engine: "ice", classes: ["cup"] }, filters), false);
-  assert.equal(selectedByCategoryFilters({ engine: "ev", classes: [] }, filters), true);
+  const filters = categoryFilterDefaults(categories, [{ is_mod: false }, { is_mod: true }]);
+  assert.deepEqual([...filters.types], ["road", "race"]);
+  assert.deepEqual([...filters.eras], ["modern", "vintage"]);
+  assert.deepEqual([...filters.engines], ["ice", "ev"]);
+  assert.deepEqual([...filters.classes], ["gt3", "gt4"]);
+  assert.equal(filters.mods, true);
 });
 
-test("empty category filters show all cars and select none", () => {
+test("car search matches readable, internal, and runtime names", () => {
+  const car = {
+    display_name: "Abarth 1000 TCR",
+    internal_name: "preset_modded_car_mech_1",
+    runtime_name: "abarth_1000_tcr",
+  };
+  assert.equal(matchesCarSearch(car, "  abarth  "), true);
+  assert.equal(matchesCarSearch(car, "MODDED_CAR"), true);
+  assert.equal(matchesCarSearch(car, "1000_tcr"), true);
+  assert.equal(matchesCarSearch(car, "GT4"), false);
+  assert.equal(matchesCarSearch(car, ""), true);
+});
+
+test("categories are additive across the original groups", () => {
+  const filters = {
+    types: new Set(["road"]),
+    eras: new Set(),
+    engines: new Set(),
+    classes: new Set(["gt4"]),
+    mods: true,
+  };
+  assert.equal(matchesCategoryFilters({ type: "road", classes: [] }, filters), true);
+  assert.equal(matchesCategoryFilters({ type: "race", classes: ["gt4"] }, filters), true);
+  assert.equal(matchesCategoryFilters({ type: "race", classes: ["gt3"] }, filters), false);
+  assert.equal(matchesCategoryFilters({ is_mod: true, classes: [] }, filters), true);
+});
+
+test("categories recover immediately after all were unchecked", () => {
   const filters = {
     types: new Set(),
     eras: new Set(),
@@ -62,13 +94,20 @@ test("empty category filters show all cars and select none", () => {
     classes: new Set(),
     mods: false,
   };
-  const car = { type: "race", era: "modern", engine: "ice", classes: ["gt3"] };
-  assert.equal(hasActiveCategoryFilters(filters), false);
-  assert.equal(matchesCategoryFilters(car, filters), true);
-  assert.equal(selectedByCategoryFilters(car, filters), false);
+  const gt3 = { type: "race", era: "modern", engine: "ice", classes: ["gt3"] };
+  const road = { type: "road", era: "modern", engine: "ice", classes: [] };
+  assert.equal(matchesCategoryFilters(gt3, filters), false);
+  assert.equal(matchesCategoryFilters(road, filters), false);
+
+  filters.types.add("road");
+  assert.equal(matchesCategoryFilters(gt3, filters), false);
+  assert.equal(matchesCategoryFilters(road, filters), true);
+
+  filters.classes.add("gt3");
+  assert.equal(matchesCategoryFilters(gt3, filters), true);
 });
 
-test("mod category shows only mod cars when used alone", () => {
+test("mod visibility is controlled only by the mod category", () => {
   const filters = {
     types: new Set(),
     eras: new Set(),
@@ -77,7 +116,62 @@ test("mod category shows only mod cars when used alone", () => {
     mods: true,
   };
   assert.equal(matchesCategoryFilters({ is_mod: true, classes: [] }, filters), true);
-  assert.equal(matchesCategoryFilters({ is_mod: false, classes: [] }, filters), false);
+  filters.mods = false;
+  assert.equal(matchesCategoryFilters({ is_mod: true, classes: [] }, filters), false);
+});
+
+test("hiding a category clears only its selected cars", () => {
+  const cars = [
+    { internal_name: "gt3", type: "race", classes: ["gt3"] },
+    { internal_name: "gt4", type: "race", classes: ["gt4"] },
+    { internal_name: "road", type: "road", classes: [] },
+  ];
+  const states = new Map(cars.map((car) => [car.internal_name, { is_selected: true }]));
+
+  assert.equal(carHasCategory(cars[0], "class", "gt3"), true);
+  assert.equal(carHasCategory(cars[1], "class", "gt3"), false);
+  assert.equal(deselectCarsInCategory(cars, states, "class", "gt3"), 1);
+  assert.equal(states.get("gt3").is_selected, false);
+  assert.equal(states.get("gt4").is_selected, true);
+  assert.equal(states.get("road").is_selected, true);
+
+  assert.equal(deselectCarsInCategory(cars, states, "type", "race"), 1);
+  assert.equal(states.get("gt4").is_selected, false);
+  assert.equal(states.get("road").is_selected, true);
+});
+
+test("search selections prefer mod, class, then type categories", () => {
+  assert.deepEqual(preferredCarCategory({ is_mod: true, classes: ["gt4"], type: "race" }), {
+    filter: "mods",
+    value: "mod",
+  });
+  assert.deepEqual(preferredCarCategory({ classes: ["gt4"], type: "race" }), {
+    filter: "classes",
+    value: "gt4",
+  });
+  assert.deepEqual(preferredCarCategory({ classes: [], type: "road" }), {
+    filter: "types",
+    value: "road",
+  });
+});
+
+test("bulk selection changes visible cars only", () => {
+  const visible = [{ internal_name: "road" }, { internal_name: "f1" }];
+  const states = new Map([
+    ["road", { is_selected: true }],
+    ["f1", { is_selected: false }],
+    ["mod", { is_selected: false }],
+  ]);
+
+  setVisibleCarSelection(visible, states, true);
+  assert.equal(states.get("road").is_selected, true);
+  assert.equal(states.get("f1").is_selected, true);
+  assert.equal(states.get("mod").is_selected, false);
+
+  setVisibleCarSelection(visible, states, false);
+  assert.equal(states.get("road").is_selected, false);
+  assert.equal(states.get("f1").is_selected, false);
+  assert.equal(states.get("mod").is_selected, false);
 });
 
 test("cars stay alphabetic by readable display name", () => {

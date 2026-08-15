@@ -800,6 +800,16 @@ md-outlined-select {
   font-size: 0.85rem;
 }
 
+.cars-category-filter {
+  display: grid;
+  gap: 4px;
+}
+
+.cars-category-label {
+  color: var(--md-sys-color-on-surface-variant);
+  font-size: 0.75rem;
+}
+
 .category-group .cat {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
@@ -878,6 +888,16 @@ md-outlined-select {
   scrollbar-gutter: stable;
   border: 1px solid var(--md-sys-color-outline-variant);
   border-radius: 0 0 12px 12px;
+}
+
+.cars-empty {
+  display: grid;
+  min-height: 120px;
+  padding: 24px;
+  place-items: center;
+  color: var(--md-sys-color-on-surface-variant);
+  font-size: 0.85rem;
+  text-align: center;
 }
 
 @media (min-width: 1101px) {

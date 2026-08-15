@@ -5,15 +5,19 @@
 import "./vendor/material-web.js";
 import {
   MOD_UPLOAD_PROXY_LIMIT_MESSAGE,
+  categoryFilterDefaults,
+  deselectCarsInCategory,
   formatLapDelta,
   formatLapTime,
   liveCarDisplayName,
+  matchesCarSearch,
   matchesCategoryFilters,
   matchesPiFilter,
   parseMobileSectionState,
+  preferredCarCategory,
   preferredTrack,
   resumableUploadError,
-  selectedByCategoryFilters,
+  setVisibleCarSelection,
   sortCarsByDisplayName,
   uploadPercent,
 } from "./dashboard_logic.mjs";
@@ -47,14 +51,16 @@ const carFilters = {
   mods: false,
   piMin: 0,
   piMax: 100,
-  onlySelected: false,
+  onlySelected: false, // View-only filter; it never changes the saved car selection.
 };
+let carFiltersInitialized = false;
 let validateTimer = null;
 let logsTimer = null;
 let logTailTimer = null;
 let liveTimer = null;
 let liveRequestPending = false;
 let activeView = "config";
+let activeConfigPath = "";
 let configSource = "env";
 let configSourceWarning = "";
 let configSourceSwitchAvailable = false;
@@ -62,6 +68,7 @@ let configSourceSwitchAvailable = false;
 const LOG_TAIL_DEFAULT = 200;
 const LOG_TAIL_MAX = 50000;
 const MOBILE_SECTION_STORAGE_KEY = "acevo-mobile-sections";
+const CAR_WORKSPACE_STORAGE_KEY = "acevo-car-workspace";
 const mobileLayoutQuery = window.matchMedia("(max-width: 600px)");
 const mobileSectionState = (() => {
   try {
@@ -78,6 +85,63 @@ const isRace = () => /RACE_WEEKEND/i.test(state.event.type || "");
 const trackList = () => (isRace() ? META.tracks.race_weekend : META.tracks.practice);
 const allTracks = () => [...META.tracks.practice, ...META.tracks.race_weekend];
 const lastTrackPerMode = new Map();
+
+function persistCarWorkspace() {
+  if (!activeConfigPath) return;
+  try {
+    sessionStorage.setItem(
+      CAR_WORKSPACE_STORAGE_KEY,
+      JSON.stringify({
+        configPath: activeConfigPath,
+        categories: {
+          types: [...carFilters.types],
+          eras: [...carFilters.eras],
+          engines: [...carFilters.engines],
+          classes: [...carFilters.classes],
+          mods: carFilters.mods,
+        },
+        cars: [...carState.entries()].map(([name, value]) => ({ name, ...value })),
+      }),
+    );
+  } catch {
+    /* Session storage can be unavailable in private or locked-down browser contexts. */
+  }
+}
+
+function restoreCarWorkspace(configPath) {
+  if (!configPath) return false;
+  try {
+    const workspace = JSON.parse(sessionStorage.getItem(CAR_WORKSPACE_STORAGE_KEY) || "null");
+    if (!workspace || workspace.configPath !== configPath) return false;
+    const categories = workspace.categories;
+    const keys = ["types", "eras", "engines", "classes"];
+    if (!categories || !keys.every((key) => Array.isArray(categories[key]))) return false;
+    const allowed = categoryFilterDefaults(META.categories, META.cars);
+    for (const key of keys) {
+      carFilters[key] = new Set(categories[key].filter((value) => allowed[key].has(value)));
+    }
+    carFilters.mods = allowed.mods && !!categories.mods;
+
+    for (const saved of Array.isArray(workspace.cars) ? workspace.cars : []) {
+      const current = carState.get(saved.name);
+      if (!current) continue;
+      current.is_selected = !!saved.is_selected;
+      current.ballast = Number(saved.ballast) || 0;
+      current.restrictor = Number(saved.restrictor) || 0;
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function clearCarWorkspace() {
+  try {
+    sessionStorage.removeItem(CAR_WORKSPACE_STORAGE_KEY);
+  } catch {
+    /* Session storage can be unavailable in private or locked-down browser contexts. */
+  }
+}
 
 function trackPit(token) {
   const found = allTracks().find((t) => t.token === token);
@@ -413,23 +477,26 @@ function categoryGroup() {
   const wrap = document.createElement("div");
   wrap.className = "category-group";
   const groups = [
-    [META.categories.type, carFilters.types],
-    [META.categories.era, carFilters.eras],
-    [META.categories.engine, carFilters.engines],
-    [META.categories.class, carFilters.classes],
+    ["type", META.categories.type, carFilters.types],
+    ["era", META.categories.era, carFilters.eras],
+    ["engine", META.categories.engine, carFilters.engines],
+    ["class", META.categories.class, carFilters.classes],
   ];
-  for (const [options, set_] of groups) {
+  for (const [kind, options, selected] of groups) {
     for (const opt of options) {
       const label = document.createElement("label");
       label.className = "cat";
       const cb = document.createElement("md-checkbox");
-      cb.checked = set_.has(opt.value);
+      cb.checked = selected.has(opt.value);
       cb.addEventListener("change", () => {
-        if (cb.checked) set_.add(opt.value);
-        else set_.delete(opt.value);
-        applyCategorySelection();
+        if (cb.checked) selected.add(opt.value);
+        else {
+          selected.delete(opt.value);
+          deselectCarsInCategory(META.cars, carState, kind, opt.value);
+          scheduleValidate();
+        }
+        persistCarWorkspace();
         renderCarList();
-        scheduleValidate();
       });
       const span = document.createElement("span");
       span.textContent = opt.label;
@@ -444,9 +511,12 @@ function categoryGroup() {
     cb.checked = carFilters.mods;
     cb.addEventListener("change", () => {
       carFilters.mods = cb.checked;
-      applyCategorySelection();
+      if (!cb.checked) {
+        deselectCarsInCategory(META.cars, carState, "mod", "mod");
+        scheduleValidate();
+      }
+      persistCarWorkspace();
       renderCarList();
-      scheduleValidate();
     });
     const span = document.createElement("span");
     span.textContent = "Mod";
@@ -456,13 +526,32 @@ function categoryGroup() {
   return wrap;
 }
 
-function applyCategorySelection() {
-  for (const car of META.cars) {
-    carState.get(car.internal_name).is_selected = selectedByCategoryFilters(car, carFilters);
-  }
-  carFilters.onlySelected = false;
+function searchActive() {
+  return !!carFilters.text.trim();
+}
+
+function ensureCarCategoryVisible(car) {
+  if (matchesCategoryFilters(car, carFilters)) return false;
+  const category = preferredCarCategory(car);
+  if (!category) return false;
+  if (category.filter === "mods") carFilters.mods = true;
+  else carFilters[category.filter].add(category.value);
+  return true;
+}
+
+function updateSearchModeControls() {
+  const searching = searchActive();
+  document.querySelectorAll(".category-group md-checkbox").forEach((checkbox) => {
+    checkbox.disabled = searching;
+  });
+  const slider = byId("cars-pi-filter");
+  if (slider) slider.disabled = searching;
   const onlySelected = byId("cars-only-selected");
-  if (onlySelected) onlySelected.checked = false;
+  if (onlySelected) onlySelected.disabled = searching;
+  const label = document.querySelector(".cars-category-label");
+  if (label) {
+    label.textContent = searching ? "Categories · search covers all cars" : "Categories · hiding clears selection";
+  }
 }
 
 function piRow() {
@@ -473,6 +562,7 @@ function piRow() {
     label.textContent = `Pi ${carFilters.piMin.toFixed(1)} – ${carFilters.piMax.toFixed(1)}`;
   };
   const slider = document.createElement("md-slider");
+  slider.id = "cars-pi-filter";
   slider.range = true;
   slider.min = META.pi_min;
   slider.max = META.pi_max;
@@ -499,15 +589,22 @@ function renderCars() {
 
   toolbar.append(
     textField({
-      label: "Filter by name",
+      label: "Search cars",
       value: carFilters.text,
       oninput: (v) => {
         carFilters.text = v;
         renderCarList();
+        updateSearchModeControls();
       },
     }),
   );
-  toolbar.append(categoryGroup());
+  const categoryFilter = document.createElement("div");
+  categoryFilter.className = "cars-category-filter";
+  const categoryLabel = document.createElement("span");
+  categoryLabel.className = "cars-category-label";
+  categoryLabel.textContent = "Categories · hiding clears selection";
+  categoryFilter.append(categoryLabel, categoryGroup());
+  toolbar.append(categoryFilter);
   toolbar.append(piRow());
 
   const filterRow = document.createElement("div");
@@ -537,7 +634,7 @@ function renderCars() {
   allVisibleCb.id = "cars-all-visible";
   allVisibleCb.addEventListener("change", () => setAllVisible(allVisibleCb.checked));
   const allVisibleSpan = document.createElement("span");
-  allVisibleSpan.textContent = "All visible cars";
+  allVisibleSpan.textContent = "Select all shown";
   allVisibleWrap.append(allVisibleCb, allVisibleSpan);
   const ballastHeader = document.createElement("span");
   ballastHeader.className = "cars-list-header-label";
@@ -559,11 +656,11 @@ function renderCars() {
   container.append(meta);
 
   renderCarList();
+  updateSearchModeControls();
 }
 
 function carMatches(car) {
-  const searchText = `${car.display_name} ${car.internal_name}`.toLowerCase();
-  if (carFilters.text && !searchText.includes(carFilters.text.toLowerCase())) return false;
+  if (searchActive()) return matchesCarSearch(car, carFilters.text);
   if (!matchesCategoryFilters(car, carFilters)) return false;
   if (!matchesPiFilter(car, carFilters.piMin, carFilters.piMax)) return false;
   if (carFilters.onlySelected && !carState.get(car.internal_name).is_selected) return false;
@@ -579,6 +676,16 @@ function renderCarList() {
   if (!list) return;
   list.innerHTML = "";
   const shown = visibleCars();
+  if (!shown.length) {
+    const empty = document.createElement("div");
+    empty.className = "cars-empty";
+    empty.textContent = searchActive()
+      ? "No cars match this search."
+      : carFilters.onlySelected
+        ? "No selected cars match the current filters."
+        : "No cars match the current filters.";
+    list.append(empty);
+  }
   for (const car of shown) {
     const cs = carState.get(car.internal_name);
     const row = document.createElement("div");
@@ -589,7 +696,11 @@ function renderCarList() {
     cb.dataset.name = car.internal_name;
     cb.addEventListener("change", () => {
       cs.is_selected = cb.checked;
-      updateCarMeta();
+      const categoriesChanged = cb.checked && ensureCarCategoryVisible(car);
+      persistCarWorkspace();
+      if (categoriesChanged) renderCars();
+      else if (carFilters.onlySelected && !cb.checked) renderCarList();
+      else updateCarMeta();
       scheduleValidate();
     });
 
@@ -620,6 +731,7 @@ function renderCarList() {
       min: 0,
       oninput: (v) => {
         cs.ballast = +v || 0;
+        persistCarWorkspace();
         scheduleValidate();
       },
     });
@@ -631,6 +743,7 @@ function renderCarList() {
       step: 0.1,
       oninput: (v) => {
         cs.restrictor = +v || 0;
+        persistCarWorkspace();
         scheduleValidate();
       },
     });
@@ -646,7 +759,9 @@ function updateCarMeta(shownCars) {
   if (!meta) return;
   const shown = Array.isArray(shownCars) ? shownCars : visibleCars();
   const selected = [...carState.values()].filter((c) => c.is_selected).length;
-  meta.textContent = `${selected} of ${META.cars.length} selected - ${shown.length} shown`;
+  meta.textContent = searchActive()
+    ? `${selected} of ${META.cars.length} selected · ${shown.length} search result(s) across all categories`
+    : `${selected} of ${META.cars.length} selected · ${shown.length} shown`;
   updateAllVisibleControl(shown);
 }
 
@@ -661,10 +776,17 @@ function updateAllVisibleControl(shownCars) {
 }
 
 function setAllVisible(value) {
-  for (const car of visibleCars()) {
-    carState.get(car.internal_name).is_selected = value;
+  const shown = visibleCars();
+  setVisibleCarSelection(shown, carState, value);
+  let categoriesChanged = false;
+  if (value) {
+    for (const car of shown) {
+      if (ensureCarCategoryVisible(car)) categoriesChanged = true;
+    }
   }
-  renderCarList();
+  persistCarWorkspace();
+  if (categoriesChanged) renderCars();
+  else renderCarList();
   scheduleValidate();
 }
 
@@ -885,15 +1007,15 @@ function loadForm(saved) {
 
   carFilters.piMin = META.pi_min;
   carFilters.piMax = META.pi_max;
-  carFilters.types.clear();
-  carFilters.eras.clear();
-  carFilters.engines.clear();
-  carFilters.classes.clear();
-  carFilters.mods = false;
+  if (!carFiltersInitialized) {
+    Object.assign(carFilters, categoryFilterDefaults(META.categories, META.cars));
+    carFiltersInitialized = true;
+  }
 }
 
 async function refreshCarCatalog() {
   const previous = new Map(carState);
+  const hadMods = META.cars.some((car) => car.is_mod);
   META = await api.get("/api/metadata");
   carState.clear();
   for (const car of META.cars) {
@@ -902,8 +1024,10 @@ async function refreshCarCatalog() {
       previous.get(car.internal_name) || { is_selected: false, ballast: 0, restrictor: 0 },
     );
   }
+  if (!hadMods && META.cars.some((car) => car.is_mod)) carFilters.mods = true;
   carFilters.piMin = META.pi_min;
   carFilters.piMax = META.pi_max;
+  persistCarWorkspace();
   renderCars();
   runValidate();
 }
@@ -1338,6 +1462,7 @@ async function applyProfile(name) {
     return;
   }
   loadForm(res.form);
+  persistCarWorkspace();
   renderAll();
   runValidate();
   setActiveView("config");
@@ -1402,7 +1527,10 @@ function updateConfigSource(info = {}) {
 
 async function reloadEffectiveConfig() {
   const cfg = await api.get("/api/config");
+  clearCarWorkspace();
+  activeConfigPath = cfg.config_path || "";
   loadForm(cfg.form);
+  persistCarWorkspace();
   byId("config-path").textContent = cfg.config_path || "—";
   updateConfigSource(cfg);
   renderAll();
@@ -1497,6 +1625,8 @@ async function doSave() {
   if (r.error) {
     toast("Save failed: " + r.error);
   } else {
+    activeConfigPath = r.path || activeConfigPath;
+    persistCarWorkspace();
     toast("Saved to " + r.path);
     renderPreview(r);
     updateConfigSource(r);
@@ -1820,7 +1950,9 @@ async function init() {
   } catch {
     /* no saved config yet */
   }
+  activeConfigPath = cfg.config_path || "";
   loadForm(cfg.form);
+  restoreCarWorkspace(activeConfigPath);
   byId("config-path").textContent = cfg.config_path || "—";
   updateConfigSource(cfg);
 

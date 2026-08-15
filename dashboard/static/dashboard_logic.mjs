@@ -20,18 +20,28 @@ export function preferredTrack(tracks, previous, remembered) {
   return sameTrack?.token || tracks[0]?.token || "";
 }
 
-export function hasActiveCategoryFilters(filters) {
-  return (
-    filters.types.size > 0 ||
-    filters.eras.size > 0 ||
-    filters.engines.size > 0 ||
-    filters.classes.size > 0 ||
-    !!filters.mods
-  );
+export function categoryFilterDefaults(categories, cars) {
+  const values = (options) => new Set((options || []).map((option) => option.value));
+  return {
+    types: values(categories.type),
+    eras: values(categories.era),
+    engines: values(categories.engine),
+    classes: values(categories.class),
+    mods: cars.some((car) => car.is_mod),
+  };
+}
+
+export function matchesCarSearch(car, query) {
+  const needle = String(query || "")
+    .trim()
+    .toLowerCase();
+  if (!needle) return true;
+  return [car.display_name, car.internal_name, car.runtime_name]
+    .filter(Boolean)
+    .some((value) => String(value).toLowerCase().includes(needle));
 }
 
 export function matchesCategoryFilters(car, filters) {
-  if (!hasActiveCategoryFilters(filters)) return true;
   return (
     filters.types.has(car.type) ||
     filters.eras.has(car.era) ||
@@ -41,12 +51,41 @@ export function matchesCategoryFilters(car, filters) {
   );
 }
 
-export function selectedByCategoryFilters(car, filters) {
-  return hasActiveCategoryFilters(filters) && matchesCategoryFilters(car, filters);
+export function carHasCategory(car, kind, value) {
+  if (kind === "mod") return !!car.is_mod;
+  if (kind === "class") return (car.classes || []).includes(value);
+  return car[kind] === value;
+}
+
+export function deselectCarsInCategory(cars, states, kind, value) {
+  let changed = 0;
+  for (const car of cars) {
+    if (!carHasCategory(car, kind, value)) continue;
+    const state = states.get(car.internal_name);
+    if (!state?.is_selected) continue;
+    state.is_selected = false;
+    changed += 1;
+  }
+  return changed;
+}
+
+export function preferredCarCategory(car) {
+  if (car.is_mod) return { filter: "mods", value: "mod" };
+  const carClass = (car.classes || [])[0];
+  if (carClass) return { filter: "classes", value: carClass };
+  if (car.type) return { filter: "types", value: car.type };
+  return null;
 }
 
 export function matchesPiFilter(car, minimum, maximum) {
   return car.is_mod || (car.pi >= minimum - 1e-6 && car.pi <= maximum + 1e-6);
+}
+
+export function setVisibleCarSelection(cars, states, selected) {
+  for (const car of cars) {
+    const state = states.get(car.internal_name);
+    if (state) state.is_selected = !!selected;
+  }
 }
 
 export function sortCarsByDisplayName(cars) {

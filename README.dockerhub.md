@@ -60,9 +60,10 @@ The Steam volume keeps SteamCMD login state so Steam Guard is not required on ev
 | `/root/.local/share/Steam`   | SteamCMD cache and login state                                              |
 | `/data/server_launcher.json` | Optional official Windows launcher config loaded via `SERVER_LAUNCHER_JSON` |
 
-Environment variables have priority by default. **Save & Apply** in the dashboard activates Dashboard priority, so the
-saved `server_launcher.json` values override conflicting configuration variables. When both sources exist, the
-Configuration tab shows the active priority and lets you switch back without deleting either configuration.
+Environment variables have priority by default. **Save** alone does not change that priority. **Save & Apply** activates
+Dashboard priority, so saved `server_launcher.json` values override conflicting dashboard-managed variables. Operational
+settings such as Steam credentials, dashboard auth, update controls, and paths always remain ENV-based. When both sources
+exist, the header shows the active priority and lets you switch back without deleting either configuration.
 
 ## Ports
 
@@ -81,7 +82,7 @@ Open **`http://<host>:8090`** in a browser (change the port with `DASHBOARD_PORT
 
 From the dashboard you can:
 
-- Configure everything visually - server name, ports, passwords, cars, track, weather etc.
+- Configure server and event settings visually - server name, ports, passwords, cars, track, weather etc.
 - Install and remove `.kspkg` car mods from the **Mods** tab
 - Start/Stop/Restart the server
 - Watch live logs
