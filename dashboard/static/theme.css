@@ -803,6 +803,12 @@ md-outlined-select {
   border-radius: 0 0 12px 12px;
 }
 
+@media (min-width: 1101px) {
+  .cars-list {
+    height: 540px;
+  }
+}
+
 .car-row {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) 72px 72px;

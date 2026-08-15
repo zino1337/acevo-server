@@ -580,6 +580,8 @@ class FrontendStaticTests(unittest.TestCase):
         self.assertIn("asks before stopping it", html)
         self.assertIn("The car and its variants are", html)
         self.assertIn("open the Configuration tab", html)
+        self.assertIn("<h2>Cars</h2>", html)
+        self.assertNotIn("Car Restrictions", html)
         self.assertIn("As a client, every driver", html)
         self.assertIn(r"%USERPROFILE%\Saved Games\ACE\mods", html)
         self.assertNotIn('accept=".json"', html)
@@ -601,6 +603,8 @@ class FrontendStaticTests(unittest.TestCase):
         self.assertIn("deleteButton.disabled = modMutationActive", app_js)
         self.assertIn("matchesPiFilter", app_js)
         self.assertIn(".mods-row", css)
+        self.assertIn("@media (min-width: 1101px)", css)
+        self.assertIn("height: 540px", css)
 
 
 class HttpIntegrationTests(unittest.TestCase):
