@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   MOD_UPLOAD_PROXY_LIMIT_MESSAGE,
   carHasCategory,
+  carPerformanceLabel,
   categoryFilterDefaults,
   deselectCarsInCategory,
   formatLapDelta,
@@ -153,6 +154,23 @@ test("search selections prefer mod, class, then type categories", () => {
     filter: "types",
     value: "road",
   });
+});
+
+test("car list metadata rounds performance and shows one useful category", () => {
+  const categories = {
+    type: [
+      { value: "road", label: "Road" },
+      { value: "race", label: "Race" },
+    ],
+    class: [{ value: "gt2", label: "GT2" }],
+  };
+  assert.equal(carPerformanceLabel({ pi: 17.9641457, type: "race", classes: ["gt2"] }, categories), "Pi 18.0 · GT2");
+  assert.equal(carPerformanceLabel({ pi: 10.178277, type: "road", classes: [] }, categories), "Pi 10.2 · Road");
+  assert.equal(carPerformanceLabel({ pi: 20, type: "race", classes: ["gt1"] }, categories), "Pi 20.0 · GT1");
+  assert.equal(
+    carPerformanceLabel({ is_mod: true, internal_name: "preset_gt3rs_mech_1" }, categories),
+    "preset_gt3rs_mech_1",
+  );
 });
 
 test("bulk selection changes visible cars only", () => {

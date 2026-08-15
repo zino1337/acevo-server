@@ -623,8 +623,10 @@ class FrontendStaticTests(unittest.TestCase):
         self.assertIn("cars-list-header", source)
         self.assertIn("name.title = car.display_name", source)
         self.assertIn('nameWrap.className = "car-info"', source)
+        self.assertIn('nameText.className = "car-name-text"', source)
         self.assertIn("No selected cars match the current filters.", source)
         self.assertIn("No cars match this search.", source)
+        self.assertIn("carPerformanceLabel(car, META.categories)", source)
         self.assertIn("if (carFilters.onlySelected && !cb.checked) renderCarList();", source)
         self.assertNotIn("Select none", source)
 
@@ -661,6 +663,10 @@ class FrontendStaticTests(unittest.TestCase):
         self.assertIn("grid-template-columns: auto minmax(0, 1fr) 72px 72px", source)
         self.assertIn("overflow-x: hidden", source)
         self.assertIn("height: 460px", source)
+        self.assertIn(".car-name-text", source)
+        self.assertIn("flex: 1 1 auto", source)
+        self.assertIn(".car-mod-badge", source)
+        self.assertIn("flex: 0 0 auto", source)
 
     def test_mobile_dashboard_breakpoint_exists(self):
         static = Path(__file__).parents[1] / "dashboard" / "static"

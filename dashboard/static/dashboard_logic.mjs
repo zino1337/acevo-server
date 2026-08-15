@@ -77,6 +77,28 @@ export function preferredCarCategory(car) {
   return null;
 }
 
+export function carCategoryLabel(car, categories = {}) {
+  const carClass = (car.classes || [])[0];
+  if (carClass) {
+    return categories.class?.find((option) => option.value === carClass)?.label || carClass.toUpperCase();
+  }
+  if (!car.type) return "";
+  return (
+    categories.type?.find((option) => option.value === car.type)?.label ||
+    `${car.type.charAt(0).toUpperCase()}${car.type.slice(1)}`
+  );
+}
+
+export function carPerformanceLabel(car, categories = {}) {
+  if (car.is_mod) return car.internal_name;
+  const performance = Number(car.pi);
+  const parts = [];
+  if (Number.isFinite(performance)) parts.push(`Pi ${performance.toFixed(1)}`);
+  const category = carCategoryLabel(car, categories);
+  if (category) parts.push(category);
+  return parts.join(" · ") || car.internal_name;
+}
+
 export function matchesPiFilter(car, minimum, maximum) {
   return car.is_mod || (car.pi >= minimum - 1e-6 && car.pi <= maximum + 1e-6);
 }

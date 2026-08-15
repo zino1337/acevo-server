@@ -5,6 +5,7 @@
 import "./vendor/material-web.js";
 import {
   MOD_UPLOAD_PROXY_LIMIT_MESSAGE,
+  carPerformanceLabel,
   categoryFilterDefaults,
   deselectCarsInCategory,
   formatLapDelta,
@@ -709,6 +710,7 @@ function renderCarList() {
     const name = document.createElement("div");
     name.className = "car-name";
     const nameText = document.createElement("span");
+    nameText.className = "car-name-text";
     nameText.textContent = car.display_name;
     name.append(nameText);
     if (car.is_mod) {
@@ -720,7 +722,7 @@ function renderCarList() {
     name.title = car.display_name;
     const pi = document.createElement("div");
     pi.className = "car-pi";
-    pi.textContent = car.is_mod ? car.internal_name : `Pi ${car.pi} · ${car.type}/${car.era}/${car.engine}`;
+    pi.textContent = carPerformanceLabel(car, META.categories);
     pi.title = pi.textContent;
     nameWrap.append(name, pi);
 
