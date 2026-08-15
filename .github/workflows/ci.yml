@@ -35,8 +35,7 @@ jobs:
           PREVIOUS_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
         run: |
           changed=false
-          if [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" ]] ||
-             ! git cat-file -e "${PREVIOUS_SHA}^{commit}" 2>/dev/null; then
+          if [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" ]] || ! git cat-file -e "${PREVIOUS_SHA}^{commit}" 2>/dev/null; then
             changed=true
           else
             while IFS= read -r path; do

@@ -7,7 +7,7 @@
 [![GitHub Repository](https://img.shields.io/badge/GitHub-Repository-181717?logo=github)](https://github.com/zino1337/acevo-server)
 
 <p align="center">
-  <img src="docs/dashboard.png" alt="AC EVO Server web dashboard Configuration tab" width="960" />
+  <img src="docs/dashboard-light-dark.png" alt="AC EVO Server web dashboard Configuration tab" width="960" />
 </p>
 
 Highly customizable Assetto Corsa Evo Dedicated Server running on Linux via Proton.<br/>
