@@ -24,6 +24,14 @@ class ReleaseWorkflowTests(unittest.TestCase):
         self.assertIn("VERSION must be increased before merging to main", workflow)
         self.assertNotIn("DOCKER_IMAGE_TAG_STAGING", workflow)
 
+    def test_documentation_only_changes_skip_image_release(self):
+        workflow = (ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
+
+        self.assertIn("id: docker-image-changes", workflow)
+        self.assertIn("Dockerfile|.dockerignore|VERSION|config/*|dashboard/*|scripts/*", workflow)
+        self.assertIn("steps.docker-image-changes.outputs.changed == 'true'", workflow)
+        self.assertIn("needs.check.outputs.docker_image_changed == 'true'", workflow)
+
     def test_compose_files_keep_the_simple_latest_default(self):
         expected = "image: zino1337/acevo-server:latest"
         for name in ("docker-compose.yml", "docker-compose-race.yml", "docker-compose.winvol.yml"):
