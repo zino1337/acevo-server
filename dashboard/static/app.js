@@ -14,6 +14,7 @@ import {
   preferredTrack,
   resumableUploadError,
   selectedByCategoryFilters,
+  sortCarsByDisplayName,
   uploadPercent,
 } from "./dashboard_logic.mjs";
 
@@ -43,6 +44,7 @@ const carFilters = {
   eras: new Set(),
   engines: new Set(),
   classes: new Set(),
+  mods: false,
   piMin: 0,
   piMax: 100,
   onlySelected: false,
@@ -54,6 +56,8 @@ let liveTimer = null;
 let liveRequestPending = false;
 let activeView = "config";
 let configSource = "env";
+let configSourceWarning = "";
+let configSourceSwitchAvailable = false;
 
 const LOG_TAIL_DEFAULT = 200;
 const LOG_TAIL_MAX = 50000;
@@ -433,6 +437,22 @@ function categoryGroup() {
       wrap.append(label);
     }
   }
+  if (META.cars.some((car) => car.is_mod)) {
+    const label = document.createElement("label");
+    label.className = "cat";
+    const cb = document.createElement("md-checkbox");
+    cb.checked = carFilters.mods;
+    cb.addEventListener("change", () => {
+      carFilters.mods = cb.checked;
+      applyCategorySelection();
+      renderCarList();
+      scheduleValidate();
+    });
+    const span = document.createElement("span");
+    span.textContent = "Mod";
+    label.append(cb, span);
+    wrap.append(label);
+  }
   return wrap;
 }
 
@@ -551,7 +571,7 @@ function carMatches(car) {
 }
 
 function visibleCars() {
-  return META.cars.filter(carMatches);
+  return sortCarsByDisplayName(META.cars.filter(carMatches));
 }
 
 function renderCarList() {
@@ -869,6 +889,7 @@ function loadForm(saved) {
   carFilters.eras.clear();
   carFilters.engines.clear();
   carFilters.classes.clear();
+  carFilters.mods = false;
 }
 
 async function refreshCarCatalog() {
@@ -1357,16 +1378,26 @@ async function deleteProfile(name) {
 
 function updateConfigSource(info = {}) {
   if (info.config_source) configSource = info.config_source;
-  const panel = byId("config-priority");
-  const text = byId("config-priority-text");
-  const button = byId("btn-config-priority");
-  const warning = info.source_warning || "";
-  const switchAvailable = !!info.source_switch_available;
-  panel.classList.toggle("hidden", !warning && !switchAvailable);
-  panel.classList.toggle("warning", !!warning);
-  text.textContent = warning || `Configuration priority: ${configSource === "dashboard" ? "Dashboard" : "Environment"}`;
-  button.classList.toggle("hidden", !switchAvailable);
-  button.textContent = configSource === "dashboard" ? "Use ENV priority" : "Use saved Dashboard config";
+  configSourceWarning = info.source_warning || "";
+  configSourceSwitchAvailable = !!info.source_switch_available;
+  const chip = byId("config-priority");
+  const icon = byId("config-priority-icon");
+  const value = byId("config-priority-value");
+  const sourceLabel = configSource === "dashboard" ? "Dashboard" : "ENV";
+  const targetLabel = configSource === "dashboard" ? "ENV" : "Dashboard";
+  chip.classList.toggle("hidden", !configSourceWarning && !configSourceSwitchAvailable);
+  chip.classList.toggle("warning", !!configSourceWarning);
+  if (configSourceWarning) {
+    icon.textContent = "!";
+    value.textContent = "Warning";
+    chip.title = configSourceWarning;
+    chip.setAttribute("aria-label", `Configuration warning: ${configSourceWarning}`);
+  } else {
+    icon.textContent = "⇄";
+    value.textContent = sourceLabel;
+    chip.title = `Configuration priority: ${sourceLabel}. Click to use ${targetLabel}.`;
+    chip.setAttribute("aria-label", chip.title);
+  }
 }
 
 async function reloadEffectiveConfig() {
@@ -1379,6 +1410,11 @@ async function reloadEffectiveConfig() {
 }
 
 async function switchConfigSource() {
+  const chip = byId("config-priority");
+  if (!configSourceSwitchAvailable) {
+    if (configSourceWarning) toast(configSourceWarning);
+    return;
+  }
   const target = configSource === "dashboard" ? "env" : "dashboard";
   const message =
     target === "env"
@@ -1386,8 +1422,7 @@ async function switchConfigSource() {
       : "Use the saved Dashboard configuration? A running server will restart.";
   const action = target === "env" ? "Use ENV priority" : "Use Dashboard config";
   if (!(await confirmDialog(message, "Change configuration priority", action))) return;
-  const button = byId("btn-config-priority");
-  button.disabled = true;
+  chip.disabled = true;
   try {
     const result = await api.post("/api/config/source", { source: target });
     if (result.error) {
@@ -1399,8 +1434,10 @@ async function switchConfigSource() {
     refreshStatus();
     refreshLogsSoon();
     refreshLiveSoon();
+  } catch (error) {
+    toast("Priority change failed: " + (error?.message || "network error"));
   } finally {
-    button.disabled = false;
+    chip.disabled = false;
   }
 }
 
@@ -1751,7 +1788,7 @@ function wireControls() {
   byId("btn-restart").addEventListener("click", doRestart);
   byId("btn-save").addEventListener("click", doSave);
   byId("btn-save-apply").addEventListener("click", doSaveApply);
-  byId("btn-config-priority").addEventListener("click", switchConfigSource);
+  byId("config-priority").addEventListener("click", switchConfigSource);
   byId("btn-profile-save").addEventListener("click", saveProfile);
   byId("tab-config").addEventListener("click", () => setActiveView("config"));
   byId("tab-mods").addEventListener("click", () => setActiveView("mods"));

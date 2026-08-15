@@ -605,7 +605,12 @@ class FrontendStaticTests(unittest.TestCase):
         html = (static / "index.html").read_text(encoding="utf-8")
         source = (static / "app.js").read_text(encoding="utf-8")
         self.assertIn('id="config-priority"', html)
-        self.assertIn("Use saved Dashboard config", source)
+        self.assertIn('id="config-priority-value"', html)
+        self.assertIn('class="topbar-statuses"', html)
+        self.assertNotIn('id="config-priority-switch"', html)
+        self.assertNotIn('id="config-priority"', html.split('<main id="config-view"', 1)[1])
+        self.assertIn('configSource === "dashboard" ? "env" : "dashboard"', source)
+        self.assertIn('byId("config-priority").addEventListener("click", switchConfigSource)', source)
         self.assertIn("Use ENV priority", source)
         self.assertIn('api.post("/api/validate", { form })', source)
         self.assertIn('api.post("/api/server/apply", { form })', source)
@@ -627,6 +632,8 @@ class FrontendStaticTests(unittest.TestCase):
         self.assertIn("preferredTrack", source)
         self.assertIn("applyCategorySelection", source)
         self.assertIn("selectedByCategoryFilters", source)
+        self.assertIn('span.textContent = "Mod"', source)
+        self.assertIn("sortCarsByDisplayName", source)
         self.assertNotIn("SESSION_PRESETS", source)
 
     def test_car_filter_layout_has_stable_dimensions(self):

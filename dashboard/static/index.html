@@ -22,20 +22,29 @@
   <body>
     <header class="topbar">
       <h1>AC EVO Server Dashboard</h1>
-      <span id="status-chip" class="status-chip unknown">
-        <span class="status-dot"></span><span id="status-text">…</span>
-      </span>
+      <div class="topbar-statuses">
+        <span id="status-chip" class="status-chip unknown">
+          <span class="status-dot"></span><span id="status-text">…</span>
+        </span>
+        <button id="config-priority" class="config-priority hidden" type="button" aria-live="polite">
+          <span id="config-priority-icon" class="config-priority-icon" aria-hidden="true">⇄</span>
+          <span class="config-priority-prefix">Config:</span>
+          <strong id="config-priority-value">ENV</strong>
+        </button>
+      </div>
       <span class="spacer"></span>
       <div class="controls">
-        <md-filled-tonal-button id="btn-start">Start</md-filled-tonal-button>
-        <md-outlined-button id="btn-stop">Stop</md-outlined-button>
-        <md-outlined-button id="btn-restart">Restart</md-outlined-button>
-        <md-outlined-button id="btn-save">Save</md-outlined-button>
-        <md-filled-button id="btn-save-apply">Save &amp; Apply</md-filled-button>
-        <label class="theme-toggle">
-          <md-icon>dark_mode</md-icon>
-          <md-switch id="theme-switch" aria-label="Dark mode"></md-switch>
-        </label>
+        <div class="primary-controls">
+          <md-filled-tonal-button id="btn-start">Start</md-filled-tonal-button>
+          <md-outlined-button id="btn-stop">Stop</md-outlined-button>
+          <md-outlined-button id="btn-restart">Restart</md-outlined-button>
+          <md-outlined-button id="btn-save">Save</md-outlined-button>
+          <md-filled-button id="btn-save-apply">Save &amp; Apply</md-filled-button>
+          <label class="theme-toggle">
+            <md-icon>dark_mode</md-icon>
+            <md-switch id="theme-switch" aria-label="Dark mode"></md-switch>
+          </label>
+        </div>
       </div>
     </header>
 
@@ -50,10 +59,6 @@
     </nav>
 
     <main id="config-view" class="layout">
-      <aside id="config-priority" class="config-priority hidden" aria-live="polite">
-        <span id="config-priority-text"></span>
-        <md-text-button id="btn-config-priority"></md-text-button>
-      </aside>
       <section id="col-server">
         <div class="card" data-mobile-section="server-info">
           <h2>Server Info</h2>

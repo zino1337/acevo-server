@@ -125,7 +125,14 @@ body {
   display: flex;
   align-items: center;
   gap: 8px;
-  flex-wrap: wrap;
+}
+
+.primary-controls,
+.topbar-statuses {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: nowrap;
 }
 
 .theme-toggle {
@@ -178,19 +185,68 @@ body {
 }
 
 .config-priority {
-  grid-column: 1 / -1;
-  display: flex;
-  min-height: 40px;
+  appearance: none;
+  border: 1px solid var(--md-sys-color-outline-variant);
+  display: inline-flex;
   align-items: center;
-  justify-content: flex-end;
-  gap: 8px;
-  padding: 0 8px;
-  color: var(--md-sys-color-on-surface-variant);
-  font-size: 0.82rem;
+  gap: 5px;
+  min-height: 34px;
+  padding: 0 12px;
+  border-radius: 999px;
+  background: var(--md-sys-color-surface-container-highest);
+  white-space: nowrap;
+  color: var(--md-sys-color-on-surface);
+  cursor: pointer;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 500;
+}
+
+.config-priority:hover {
+  background: var(--md-sys-color-surface-container-high);
+}
+
+.config-priority:focus-visible {
+  outline: 2px solid var(--md-sys-color-primary);
+  outline-offset: 2px;
+}
+
+.config-priority:disabled {
+  cursor: wait;
+  opacity: 0.7;
+}
+
+.config-priority-icon,
+.config-priority strong {
+  color: var(--md-sys-color-primary);
+  font-weight: 600;
 }
 
 .config-priority.warning {
   color: var(--md-sys-color-error);
+}
+
+@media (max-width: 1100px) and (min-width: 601px) {
+  .topbar {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .topbar .spacer {
+    display: none;
+  }
+
+  .topbar .controls {
+    display: flex;
+    grid-column: 1 / -1;
+    justify-content: flex-end;
+    width: 100%;
+    gap: 8px;
+  }
+
+  .topbar-statuses {
+    justify-self: end;
+  }
 }
 
 /* Layout */
@@ -1032,11 +1088,21 @@ md-outlined-select {
   }
 
   .topbar .controls {
-    display: grid;
+    display: block;
     grid-column: 1 / -1;
-    grid-template-columns: repeat(6, minmax(0, 1fr));
     width: 100%;
+  }
+
+  .primary-controls {
+    display: grid;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
     gap: 4px;
+    width: 100%;
+  }
+
+  .topbar-statuses {
+    justify-self: end;
+    gap: 6px;
   }
 
   .status-chip {
@@ -1044,9 +1110,19 @@ md-outlined-select {
     padding: 5px 10px;
   }
 
-  .topbar .controls > * {
+  .primary-controls > * {
     min-width: 0;
     width: 100%;
+  }
+
+  .config-priority {
+    min-height: 30px;
+    padding: 0 10px;
+  }
+
+  .config-priority-icon,
+  .config-priority-prefix {
+    display: none;
   }
 
   #btn-start,
@@ -1270,14 +1346,6 @@ md-outlined-select {
 
   .live-driver-head {
     display: none;
-  }
-
-  .config-priority {
-    align-items: flex-start;
-    flex-direction: column;
-    justify-content: flex-start;
-    gap: 0;
-    padding: 4px 0;
   }
 
   .live-driver-row {

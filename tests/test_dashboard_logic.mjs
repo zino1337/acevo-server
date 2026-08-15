@@ -13,6 +13,7 @@ import {
   preferredTrack,
   resumableUploadError,
   selectedByCategoryFilters,
+  sortCarsByDisplayName,
   trackIdentity,
   uploadPercent,
 } from "../dashboard/static/dashboard_logic.mjs";
@@ -45,6 +46,7 @@ test("category filters are additive across groups", () => {
     eras: new Set(),
     engines: new Set(["ev"]),
     classes: new Set(["gt3"]),
+    mods: false,
   };
   assert.equal(matchesCategoryFilters({ engine: "ice", classes: ["gt3"] }, filters), true);
   assert.equal(matchesCategoryFilters({ engine: "ev", classes: [] }, filters), true);
@@ -58,11 +60,36 @@ test("empty category filters show all cars and select none", () => {
     eras: new Set(),
     engines: new Set(),
     classes: new Set(),
+    mods: false,
   };
   const car = { type: "race", era: "modern", engine: "ice", classes: ["gt3"] };
   assert.equal(hasActiveCategoryFilters(filters), false);
   assert.equal(matchesCategoryFilters(car, filters), true);
   assert.equal(selectedByCategoryFilters(car, filters), false);
+});
+
+test("mod category shows only mod cars when used alone", () => {
+  const filters = {
+    types: new Set(),
+    eras: new Set(),
+    engines: new Set(),
+    classes: new Set(),
+    mods: true,
+  };
+  assert.equal(matchesCategoryFilters({ is_mod: true, classes: [] }, filters), true);
+  assert.equal(matchesCategoryFilters({ is_mod: false, classes: [] }, filters), false);
+});
+
+test("cars stay alphabetic by readable display name", () => {
+  const cars = [
+    { display_name: "Volkswagen Golf", internal_name: "vw" },
+    { display_name: "Abarth 1000 TCR", internal_name: "abarth" },
+    { display_name: "BMW M2", internal_name: "bmw" },
+  ];
+  assert.deepEqual(
+    sortCarsByDisplayName(cars).map((car) => car.internal_name),
+    ["abarth", "bmw", "vw"],
+  );
 });
 
 test("PI filters never hide mods with unknown performance", () => {

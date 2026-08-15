@@ -21,7 +21,13 @@ export function preferredTrack(tracks, previous, remembered) {
 }
 
 export function hasActiveCategoryFilters(filters) {
-  return filters.types.size > 0 || filters.eras.size > 0 || filters.engines.size > 0 || filters.classes.size > 0;
+  return (
+    filters.types.size > 0 ||
+    filters.eras.size > 0 ||
+    filters.engines.size > 0 ||
+    filters.classes.size > 0 ||
+    !!filters.mods
+  );
 }
 
 export function matchesCategoryFilters(car, filters) {
@@ -30,7 +36,8 @@ export function matchesCategoryFilters(car, filters) {
     filters.types.has(car.type) ||
     filters.eras.has(car.era) ||
     filters.engines.has(car.engine) ||
-    (car.classes || []).some((value) => filters.classes.has(value))
+    (car.classes || []).some((value) => filters.classes.has(value)) ||
+    (!!filters.mods && !!car.is_mod)
   );
 }
 
@@ -40,6 +47,18 @@ export function selectedByCategoryFilters(car, filters) {
 
 export function matchesPiFilter(car, minimum, maximum) {
   return car.is_mod || (car.pi >= minimum - 1e-6 && car.pi <= maximum + 1e-6);
+}
+
+export function sortCarsByDisplayName(cars) {
+  return [...cars].sort((left, right) => {
+    const byName = String(left.display_name || left.internal_name || "").localeCompare(
+      String(right.display_name || right.internal_name || ""),
+      undefined,
+      { sensitivity: "base", numeric: true },
+    );
+    if (byName) return byName;
+    return String(left.internal_name || "").localeCompare(String(right.internal_name || ""));
+  });
 }
 
 export function parseMobileSectionState(raw) {
