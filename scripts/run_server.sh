@@ -26,6 +26,8 @@ STEAM_COMPAT_DATA_PATH="${SERVER_INSTALL_DIR}/steamapps/compatdata/${APP_ID}"
 WINEPREFIX="${STEAM_COMPAT_DATA_PATH}/pfx"
 MIN_CPU_CORES=2
 MIN_MEM_BYTES=$((4 * 1024 * 1024 * 1024))
+MAX_SERVER_START_ATTEMPTS=3
+SERVER_RETRY_DELAY_SECONDS=2
 
 export STEAM_COMPAT_CLIENT_INSTALL_PATH
 export STEAM_COMPAT_DATA_PATH
@@ -267,6 +269,42 @@ print_crash_hint() {
   fi
 }
 
+run_dedicated_server() {
+  local dedicated_dir="$1"
+  local dedicated_name="$2"
+  local attempt dedicated_exit
+
+  for ((attempt = 1; attempt <= MAX_SERVER_START_ATTEMPTS; attempt++)); do
+    if [[ "${attempt}" -gt 1 ]]; then
+      echo "Retrying dedicated server start (${attempt}/${MAX_SERVER_START_ATTEMPTS}) after runtime cleanup ..." >&2
+      cleanup_wine
+      cleanup_xvfb
+      sleep "${SERVER_RETRY_DELAY_SECONDS}"
+      start_xvfb
+    fi
+
+    set +e
+    (
+      cd "${dedicated_dir}"
+      run_gracefully "${dedicated_name}" \
+        "${PROTON_BIN}" runinprefix "./${dedicated_name}" \
+        -serverconfig "${SERVER_PAYLOAD}" \
+        -seasondefinition "${SEASON_PAYLOAD}"
+    )
+    dedicated_exit=$?
+    set -e
+
+    if [[ "${dedicated_exit}" -eq 0 || "${dedicated_exit}" -eq 130 || "${dedicated_exit}" -eq 143 ]]; then
+      return "${dedicated_exit}"
+    fi
+    if [[ "${attempt}" -lt "${MAX_SERVER_START_ATTEMPTS}" ]]; then
+      echo "WARNING: ${dedicated_name} start attempt ${attempt} exited with code ${dedicated_exit}." >&2
+      continue
+    fi
+    return "${dedicated_exit}"
+  done
+}
+
 configure_proton_runtime
 log_fingerprint
 report_resource_limits
@@ -294,13 +332,7 @@ if [[ -n "${DEDICATED_EXE_PATH}" ]]; then
   echo "Starting dedicated server with Proton + Xvfb (${XVFB_DISPLAY}): ${DEDICATED_EXE_PATH}"
 
   set +e
-  (
-    cd "${DEDICATED_EXE_DIR}"
-    run_gracefully "AssettoCorsaEVOServer.exe" \
-      "${PROTON_BIN}" runinprefix "./${DEDICATED_EXE_NAME}" \
-      -serverconfig "${SERVER_PAYLOAD}" \
-      -seasondefinition "${SEASON_PAYLOAD}"
-  )
+  run_dedicated_server "${DEDICATED_EXE_DIR}" "${DEDICATED_EXE_NAME}"
   dedicated_exit=$?
   set -e
 

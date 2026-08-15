@@ -1390,7 +1390,10 @@ def build_documents(env: dict[str, str]) -> tuple[dict, dict, list[str]]:
 
 
 def encode_payload(document: dict) -> str:
-    compressed = zlib.compress(json.dumps(document, separators=(",", ":")).encode("utf-8"))
+    # AC EVO 0.8.1 intermittently exits while reading some Huffman-coded
+    # payloads. Stored DEFLATE blocks keep the standard zlib envelope while
+    # avoiding that data-dependent native decoder path.
+    compressed = zlib.compress(json.dumps(document, separators=(",", ":")).encode("utf-8"), level=0)
     return base64.b64encode(struct.pack("<I", len(compressed)) + compressed).decode("ascii")
 
 

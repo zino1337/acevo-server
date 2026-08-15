@@ -49,6 +49,8 @@ class StartupUpdateTests(unittest.TestCase):
         self.assertIn("cleanup_wine", run_server_source)
         self.assertIn('"${WINE_SERVER_BIN}" -k', run_server_source)
         self.assertIn('"${WINE_SERVER_BIN}" -w', run_server_source)
+        self.assertIn("MAX_SERVER_START_ATTEMPTS=3", run_server_source)
+        self.assertIn("Retrying dedicated server start", run_server_source)
 
     def test_auto_update_false_skips_update(self):
         result, events = self.run_update_flow("false")
