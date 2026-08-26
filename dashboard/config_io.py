@@ -2,8 +2,8 @@
 and validate by round-tripping through the real server pipeline.
 
 The form is a flat, seconds-based JSON the frontend posts. ``form_to_launcher`` renders it as a
-byte-faithful Windows-launcher file (full car list, dual key casing, ``Length`` in seconds,
-``forceTimeDuration`` for Time/Laps). ``launcher_to_form`` parses either a dashboard- or
+Windows-launcher-compatible file (full car list, dual key casing, ``Length`` in seconds,
+``Duration`` 0/1 for Time/Laps). ``launcher_to_form`` parses either a dashboard- or
 Windows-generated file back into the form. ``validate``/``save`` run the candidate file through
 :func:`scripts.launch_payloads.build_documents_with_report` so the UI sees exactly how the
 server will interpret it.
@@ -113,29 +113,63 @@ def _default_track_token(cfg: dict, event: dict) -> str:
 # --- form -> launcher json ------------------------------------------------------------------
 
 
-def _session_block(name: str, session: dict, visible: bool, *, force_time: bool, length: int) -> dict:
-    return {
-        "forceTimeDuration": bool(force_time),
+def _session_block(
+    name: str,
+    session: dict,
+    visible: bool,
+    *,
+    duration_type: int,
+    length: int,
+    persist_mandatory_enabled: bool = False,
+) -> dict:
+    block = {
         "TimeMultiplier": _as_int(session.get("time_multiplier"), 1),
         "IsVisible": bool(visible),
         "Name": name,
-        "Duration": 0,
+        "Duration": duration_type,
         "Length": length,
         "Hour": _as_int(session.get("hour"), 16),
         "Minute": _as_int(session.get("minute"), 0),
         "MaxWaitToBox": _as_int(session.get("max_wait_to_box"), 10),
         "OvertimeWaitingNextSession": _as_int(session.get("overtime_waiting_next_session"), 10),
+        "WindowTimeMandatoryPitstop": _as_int(session.get("mandatory_pitstop_window_seconds"), 600),
         "MinWaitingForPlayers": _as_int(session.get("min_waiting_for_players"), 10),
         "MaxWaitingForPlayers": _as_int(session.get("max_waiting_for_players"), 30),
+        "MandatoryPitStopRefuel": _as_bool(session.get("mandatory_pitstop_refuel"), True),
+        "MandatoryPitStopTyreChange": _as_bool(session.get("mandatory_pitstop_tyre_change"), True),
+        "EnableTraffic": True,
+        "SelectedSpawnValue": None,
     }
+    if persist_mandatory_enabled:
+        block["MandatoryPitStopEnabled"] = _as_bool(session.get("mandatory_pitstop_enabled"), False)
+    return block
 
 
 def _race_block(session: dict, visible: bool) -> dict:
     duration_type = _as_str(session.get("duration_type")) or lp.MAPPINGS["duration_type"]["time"]
     laps_mode = _is_laps(duration_type)
     length = _as_int(session.get("laps"), 10) if laps_mode else _as_int(session.get("length_sec"), 1500)
-    block = _session_block("Race", session, visible, force_time=not laps_mode, length=length)
+    block = _session_block(
+        "Race",
+        session,
+        visible,
+        duration_type=1 if laps_mode else 0,
+        length=length,
+        persist_mandatory_enabled=True,
+    )
     block["MaxWaitToBox"] = _as_int(session.get("max_wait_to_box"), 60)
+    mandatory_enabled = (
+        visible
+        and not laps_mode
+        and length > lp.MANDATORY_PITSTOP_MIN_RACE_SECONDS
+        and _as_bool(session.get("mandatory_pitstop_enabled"), False)
+    )
+    block["MandatoryPitStopEnabled"] = mandatory_enabled
+    if mandatory_enabled:
+        block["WindowTimeMandatoryPitstop"] = min(
+            max(_as_int(session.get("mandatory_pitstop_window_seconds"), 600), 1),
+            length,
+        )
     return block
 
 
@@ -241,24 +275,31 @@ def form_to_launcher(form: dict, cfg: dict | None = None) -> dict:
             "Practice",
             sessions.get("practice", {}),
             True,
-            force_time=True,
+            duration_type=0,
             length=_as_int((sessions.get("practice") or {}).get("length_sec"), 300),
         ),
         "QualifyingSession": _session_block(
             "Qualify",
             sessions.get("qualify", {}),
             race,
-            force_time=True,
+            duration_type=0,
             length=_as_int((sessions.get("qualify") or {}).get("length_sec"), 600),
         ),
         "WarmupSession": _session_block(
             "Warmup",
             sessions.get("warmup", {}),
             race,
-            force_time=True,
+            duration_type=0,
             length=_as_int((sessions.get("warmup") or {}).get("length_sec"), 300),
         ),
         "RaceSession": _race_block(sessions.get("race", {}) or {}, race),
+        "FreeroamSession": _session_block(
+            "FreeRoam",
+            {},
+            False,
+            duration_type=0,
+            length=300,
+        ),
     }
 
     return {"Server": server_block, "Event": event_block, "Sessions": sessions_block}
@@ -284,17 +325,36 @@ def _session_form(session: dict) -> dict:
 
 def _race_session_form(session: dict) -> dict:
     form = _session_form(session)
-    force_time = _as_bool(_get(session, "forceTimeDuration", default=True), default=True)
-    length = _as_int(_get(session, "Length", "length", "Duration", "duration"), 1500)
-    if force_time:
-        form["duration_type"] = lp.MAPPINGS["duration_type"]["time"]
-        form["length_sec"] = length
-        form["laps"] = 10
+    if "forceTimeDuration" in session:
+        laps_mode = not _as_bool(_get(session, "forceTimeDuration", default=True), default=True)
     else:
+        laps_mode = _as_int(_get(session, "Duration", "duration"), 0) == 1
+    length = _as_int(_get(session, "Length", "length", "Duration", "duration"), 1500)
+    if laps_mode:
         form["duration_type"] = lp.MAPPINGS["duration_type"]["laps"]
         form["laps"] = length
         form["length_sec"] = 1500
+    else:
+        form["duration_type"] = lp.MAPPINGS["duration_type"]["time"]
+        form["length_sec"] = length
+        form["laps"] = 10
     form["max_wait_to_box"] = _as_int(_get(session, "MaxWaitToBox", "max_wait_to_box"), 60)
+    form["mandatory_pitstop_enabled"] = _as_bool(
+        _get(session, "MandatoryPitStopEnabled", "mandatory_pitstop_enabled"),
+        False,
+    )
+    form["mandatory_pitstop_window_seconds"] = _as_int(
+        _get(session, "WindowTimeMandatoryPitstop", "mandatory_pitstop_window_seconds"),
+        600,
+    )
+    form["mandatory_pitstop_refuel"] = _as_bool(
+        _get(session, "MandatoryPitStopRefuel", "mandatory_pitstop_refuel"),
+        True,
+    )
+    form["mandatory_pitstop_tyre_change"] = _as_bool(
+        _get(session, "MandatoryPitStopTyreChange", "mandatory_pitstop_tyre_change"),
+        True,
+    )
     return form
 
 
@@ -421,6 +481,19 @@ def _runtime_race_session_form(game: dict, defaults: dict) -> dict:
         game.get("max_waiting_for_players"),
         _as_int(defaults.get("max_waiting_for_players_seconds"), 30),
     )
+    form["mandatory_pitstop_enabled"] = _as_bool(game.get("mandatory_pit_stop"), False)
+    form["mandatory_pitstop_window_seconds"] = _as_int(
+        game.get("pit_window"),
+        _as_int(defaults.get("mandatory_pitstop_window_seconds"), 600),
+    )
+    form["mandatory_pitstop_refuel"] = _as_bool(
+        game.get("requires_refuelling"),
+        _as_bool(defaults.get("mandatory_pitstop_refuel"), True),
+    )
+    form["mandatory_pitstop_tyre_change"] = _as_bool(
+        game.get("requires_tyre_change"),
+        _as_bool(defaults.get("mandatory_pitstop_tyre_change"), True),
+    )
     return form
 
 
@@ -465,11 +538,9 @@ def runtime_documents_to_form(server_doc: dict, season_doc: dict, cfg: dict | No
     if not isinstance(game, dict):
         game = {}
 
-    track = season_doc.get("event", {}) if isinstance(season_doc, dict) else {}
     max_players = _as_int(server_doc.get("max_players"), int(cfg["server_defaults"]["max_players"]))
-    max_players_limit = (
-        _as_int(track.get("max_pit_slot") if isinstance(track, dict) else None, max_players) or max_players
-    )
+    track_token = _runtime_track_token(season_doc, cfg)
+    max_players_limit = _pit_by_token().get(track_token, max_players)
 
     server_form = {
         "server_name": _as_str(server_doc.get("server_name")) or cfg["server_defaults"]["server_name"],
@@ -556,6 +627,33 @@ def _saved_document_available(path: str | os.PathLike) -> bool:
     return isinstance(doc, dict)
 
 
+def _mandatory_pitstop_extension_warning(path: str | os.PathLike) -> str:
+    try:
+        doc = json.loads(Path(path).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return ""
+    event = doc.get("Event", {}) if isinstance(doc, dict) else {}
+    sessions = doc.get("Sessions", {}) if isinstance(doc, dict) else {}
+    race = sessions.get("RaceSession", {}) if isinstance(sessions, dict) else {}
+    if not isinstance(event, dict) or not isinstance(race, dict):
+        return ""
+    if not _is_race(_as_str(_get(event, "SelectedSessionTypeValue", "type"))):
+        return ""
+    if "MandatoryPitStopEnabled" in race or "mandatory_pitstop_enabled" in race:
+        return ""
+    if "forceTimeDuration" in race:
+        laps_mode = not _as_bool(race.get("forceTimeDuration"), True)
+    else:
+        laps_mode = _as_int(_get(race, "Duration", "duration"), 0) == 1
+    length = _as_int(_get(race, "Length", "length", "Duration", "duration"), 0)
+    if laps_mode or length <= lp.MANDATORY_PITSTOP_MIN_RACE_SECONDS:
+        return ""
+    return (
+        "This official AC EVO 0.9 launcher file does not store the Mandatory Pitstop main switch. "
+        "It was imported as Off; enable it explicitly in the Dashboard if required."
+    )
+
+
 def config_source_info(
     path: str | os.PathLike,
     env: dict | None = None,
@@ -571,6 +669,8 @@ def config_source_info(
         warning = note
     if requested == "dashboard" and not dashboard_available:
         warning = "Dashboard configuration is missing or invalid. Environment priority is active."
+    if not warning and dashboard_available:
+        warning = _mandatory_pitstop_extension_warning(path)
     env_keys = sorted(key for key in dashboard_managed_env_keys(cfg) if key in runtime_env)
     return {
         "config_source": effective,

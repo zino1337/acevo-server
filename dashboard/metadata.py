@@ -167,6 +167,11 @@ def _defaults(cfg: dict) -> dict:
     race = _session_defaults(cfg, "race")
     race["duration_type"] = lp.MAPPINGS["duration_type"]["time"]
     race["laps"] = int(cfg["session_defaults"].get("race", {}).get("duration_laps", 10))
+    race_defaults = cfg["session_defaults"].get("race", {})
+    race["mandatory_pitstop_enabled"] = bool(race_defaults.get("mandatory_pitstop_enabled", False))
+    race["mandatory_pitstop_window_seconds"] = int(race_defaults.get("mandatory_pitstop_window_seconds", 600))
+    race["mandatory_pitstop_refuel"] = bool(race_defaults.get("mandatory_pitstop_refuel", True))
+    race["mandatory_pitstop_tyre_change"] = bool(race_defaults.get("mandatory_pitstop_tyre_change", True))
     return {
         "server": {
             "server_name": server.get("server_name", "AC EVO Server"),

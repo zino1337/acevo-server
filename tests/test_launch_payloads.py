@@ -4,10 +4,25 @@ import os
 import struct
 import tempfile
 import unittest
+import zlib
 from pathlib import Path
 from unittest.mock import patch
 
 from scripts import launch_payloads
+
+
+OFFICIAL_0_9_MANDATORY_SEASON_PAYLOAD = (
+    "AAAHNnic1VXLbtswELwHyD8QPPvgR2q0ujmJ4BiFU8NxG/S02EgrialEKhRlWwj87wUpyY+4NnxsjtyZWc6O"
+    "pNX79RVjPMaMwFQ5cY/xMWY0VSEtqpxgPrrz4dn3v/uP97zjyLQkabjH3u2JMW40Bn+s8FajDAv2gCZIai5j"
+    "PMVKlZbOx7Nt0bUAiVl94YzNMaAt6hpCSjI2icUH33pDbrFNY2CdK23gtVCSeyzCtKDOboxAyUjEe/5yjYERA"
+    "UFYajTCiQbdbucjbERGoCIIsdqpGeMVoeYe63f7N42GMZ4p6cx93ZVqXe/LrpKo0ip7wz2dkKWxU7f3M8YLCp"
+    "QMD2vOTFamRuSpINelxjZHvtWStKOvUBghY5C0NlBQUdSz9o5HzXDt2GAUvKj1AemtxFRE1Ym0WvSThdXavjyr"
+    "VnEuqhXqrMxPJNWAnyyoxvXlOTWCczFpPPr4/o0draAnSimwyH3LWEymPj8Q/+8B9z8k7Exfnq+jn0s3E3LbJV"
+    "Ia8hQr0sUhp9EfcwZ7HBmiUbqCXBgojMq5x4wuaeuE3kqhqQBTaYIgQRnbRHb7d5+jKSopTYW0m/iAYruvhAzV"
+    "ints2O3uLfYVoUlIn34NnmuC+zM9+KNfv2E+mjw2/6VW/UIJLkX9DE+2uG1J8LQYLSZ3TQ8hhRGYQqyFHZ9P6v"
+    "NYixx+zBaT6c8pv77a/AUROQY1"
+)
+MANDATORY_KEYS = {"mandatory_pit_stop", "pit_window", "requires_refuelling", "requires_tyre_change"}
 
 
 def resolved(report, key):
@@ -255,6 +270,84 @@ class LaunchPayloadTests(unittest.TestCase):
             {"preset_xbgt2_mech_1", "preset_xbgt4_mech_1", "preset_mk8r_mech_1"},
         )
 
+    def test_0_9_car_catalog_matches_launcher_values(self):
+        cars = {car["internal_name"]: car for car in launch_payloads.load_config()["bundled_cars_data"]}
+        self.assertEqual(len(cars), 100)
+        self.assertEqual(
+            {
+                name: (
+                    cars[name]["display_name"],
+                    cars[name]["performance_indicator"],
+                    cars[name]["property_1"],
+                    cars[name]["property_2"],
+                    cars[name]["property_3"],
+                )
+                for name in ("preset_r8gt2_mech_1", "preset_r8v10_mech_1", "preset_rx7fd_mech_1")
+            },
+            {
+                "preset_r8gt2_mech_1": ("Audi R8 LMS GT2 - GT2", 17.9, 1, 0, 0),
+                "preset_r8v10_mech_1": (
+                    "Audi R8 V10 performance quattro - Coupe quattro",
+                    13.5,
+                    0,
+                    0,
+                    0,
+                ),
+                "preset_rx7fd_mech_1": ("Mazda RX-7 FD Spirit R - Standard", 9.8, 0, 2, 0),
+            },
+        )
+
+        changed_pi = {
+            "preset_r8gt3_mech_1": 19.5,
+            "preset_r8gt4_mech_1": 14.7,
+            "preset_rs3_mech_1": 11.5,
+            "preset_rs6_mech_1": 11.9,
+            "preset_sq_mech_1": 10.8,
+            "preset_m2csr_mech_1": 11.7,
+            "preset_m2csr_mech_2": 12.0,
+            "preset_m4gt3_mech_1": 20.0,
+            "preset_dalexp_mech_1": 21.6,
+            "preset_dalsc_mech_3": 20.4,
+            "preset_296gt3_mech_1": 21.2,
+            "preset_f488ce_mech_1": 19.1,
+            "preset_f40lm_mech_1": 19.2,
+            "preset_msggt3_mech_1": 18.3,
+            "preset_nsxr_mech_1": 9.9,
+            "preset_xbgt2_mech_1": 18.2,
+            "preset_xbgt4_mech_1": 18.0,
+            "preset_stevo2_mech_1": 17.4,
+            "preset_exigev6_mech_2": 13.9,
+            "preset_exigev6_mech_1": 12.6,
+            "preset_mcgt2_mech_1": 16.7,
+            "preset_mx5ndcup_mech_1": 10.1,
+            "preset_mx5ndcup_mech_2": 10.4,
+            "preset_amggt2_mech_1": 17.0,
+            "preset_gt4csmr_mech_1": 15.4,
+            "preset_gt2rscs_mech_1": 17.2,
+            "preset_992c_mech_2": 16.3,
+            "preset_992c_mech_1": 16.3,
+            "preset_992c_mech_3": 16.3,
+            "preset_992ren_mech_1": 18.6,
+            "preset_992ren_mech_2": 19.2,
+            "preset_964_mech_1": 12.2,
+            "preset_964_mech_2": 12.3,
+            "preset_935_mech_1": 16.9,
+            "preset_mk8gti_mech_1": 10.6,
+            "preset_mk8r_mech_1": 9.8,
+        }
+        self.assertEqual({name: cars[name]["performance_indicator"] for name in changed_pi}, changed_pi)
+        self.assertEqual(
+            {
+                name: cars[name]["display_name"]
+                for name in ("preset_stevo2_mech_1", "preset_sto_mech_1", "preset_sto_mech_2")
+            },
+            {
+                "preset_stevo2_mech_1": "Lamborghini Huracán ST EVO2 - Super Trofeo",
+                "preset_sto_mech_1": "Lamborghini Huracán STO - Road",
+                "preset_sto_mech_2": "Lamborghini Huracán STO - Trackday",
+            },
+        )
+
     def test_variant_car_env_tokens_are_unique(self):
         server_doc, _, warnings = launch_payloads.build_documents(
             {
@@ -383,6 +476,69 @@ class LaunchPayloadTests(unittest.TestCase):
         self.assertEqual(season_doc_custom["game_config"]["race_duration"], 12)
         self.assertEqual(resolved(report_custom, "RACE_DURATION_LAPS")["value"], 12)
 
+    def test_mandatory_pitstop_defaults_off_and_omits_all_payload_fields(self):
+        _, season_doc, warnings = launch_payloads.build_documents(
+            {"EVENT_TYPE": "Race_Weekend", "RACE_DURATION_TYPE": "Time", "RACE_DURATION_MINUTES": "25"}
+        )
+        self.assertEqual(warnings, [])
+        self.assertTrue(MANDATORY_KEYS.isdisjoint(season_doc["game_config"]))
+
+    def test_mandatory_pitstop_emits_all_requirement_combinations(self):
+        for refuel in (False, True):
+            for tyre_change in (False, True):
+                with self.subTest(refuel=refuel, tyre_change=tyre_change):
+                    _, season_doc, warnings = launch_payloads.build_documents(
+                        {
+                            "EVENT_TYPE": "Race_Weekend",
+                            "RACE_DURATION_TYPE": "Time",
+                            "RACE_DURATION_MINUTES": "50",
+                            "RACE_MANDATORY_PITSTOP_ENABLED": "true",
+                            "RACE_MANDATORY_PITSTOP_WINDOW_SECONDS": "600",
+                            "RACE_MANDATORY_PITSTOP_REFUEL": str(refuel).lower(),
+                            "RACE_MANDATORY_PITSTOP_TYRE_CHANGE": str(tyre_change).lower(),
+                        }
+                    )
+                    self.assertEqual(warnings, [])
+                    self.assertEqual(
+                        {key: season_doc["game_config"][key] for key in MANDATORY_KEYS},
+                        {
+                            "mandatory_pit_stop": True,
+                            "pit_window": 600,
+                            "requires_refuelling": refuel,
+                            "requires_tyre_change": tyre_change,
+                        },
+                    )
+
+    def test_mandatory_pitstop_invalid_modes_disable_with_warning(self):
+        cases = (
+            {"EVENT_TYPE": "Practice", "RACE_DURATION_TYPE": "Time", "RACE_DURATION_MINUTES": "50"},
+            {"EVENT_TYPE": "Race_Weekend", "RACE_DURATION_TYPE": "Laps", "RACE_DURATION_LAPS": "10"},
+            {"EVENT_TYPE": "Race_Weekend", "RACE_DURATION_TYPE": "Time", "RACE_DURATION_MINUTES": "20"},
+        )
+        for case in cases:
+            with self.subTest(case=case):
+                _, season_doc, warnings, report = launch_payloads.build_documents_with_report(
+                    {**case, "RACE_MANDATORY_PITSTOP_ENABLED": "true"}
+                )
+                self.assertTrue(any("mandatory pitstops require" in warning for warning in warnings))
+                self.assertTrue(MANDATORY_KEYS.isdisjoint(season_doc["game_config"]))
+                self.assertEqual(resolved(report, "RACE_MANDATORY_PITSTOP_ENABLED")["value"], False)
+                self.assertEqual(resolved(report, "RACE_MANDATORY_PITSTOP_ENABLED")["source"], "fallback")
+
+    def test_mandatory_pitstop_window_is_clamped_to_race_duration(self):
+        _, season_doc, warnings, report = launch_payloads.build_documents_with_report(
+            {
+                "EVENT_TYPE": "Race_Weekend",
+                "RACE_DURATION_MINUTES": "25",
+                "RACE_MANDATORY_PITSTOP_ENABLED": "true",
+                "RACE_MANDATORY_PITSTOP_WINDOW_SECONDS": "9999",
+            }
+        )
+        self.assertTrue(any("outside 1-1500" in warning for warning in warnings))
+        self.assertEqual(season_doc["game_config"]["pit_window"], 1500)
+        self.assertEqual(resolved(report, "RACE_MANDATORY_PITSTOP_WINDOW_SECONDS")["value"], 1500)
+        self.assertEqual(resolved(report, "RACE_MANDATORY_PITSTOP_WINDOW_SECONDS")["source"], "fallback")
+
     def test_wait_values_stay_seconds(self):
         _, season_doc, warnings, report = launch_payloads.build_documents_with_report(
             {
@@ -449,6 +605,46 @@ class LaunchPayloadTests(unittest.TestCase):
         self.assertEqual(resolved(report, "RACE_MIN_WAITING_FOR_PLAYERS_SECONDS")["source"], "json")
         self.assertEqual(resolved(report, "RACE_MAX_WAITING_FOR_PLAYERS_SECONDS")["source"], "json")
         self.assertEqual(resolved(report, "SERVER_LAUNCHER_JSON")["source"], "env")
+
+    def test_server_launcher_0_9_imports_time_mode_and_defaults_mandatory_off(self):
+        fixture = Path("tests/fixtures/server_launcher_windows_0_9_sample.json")
+        server_doc, season_doc, warnings, report = launch_payloads.build_documents_with_report(
+            {"SERVER_LAUNCHER_JSON": str(fixture)}
+        )
+
+        self.assertEqual(
+            warnings,
+            [
+                "server_launcher.json: the official 0.9 launcher does not serialize the mandatory pitstop "
+                "enabled state; defaulting it to Off."
+            ],
+        )
+        self.assertEqual(season_doc["game_config"]["race_duration_type"], launch_payloads.RACE_DURATION_TYPE_TIME)
+        self.assertEqual(season_doc["game_config"]["race_duration"], 3000)
+        self.assertTrue(MANDATORY_KEYS.isdisjoint(season_doc["game_config"]))
+        self.assertEqual(resolved(report, "RACE_MANDATORY_PITSTOP_ENABLED")["value"], False)
+        self.assertEqual(
+            selected_car_names(server_doc),
+            {"preset_r8gt2_mech_1", "preset_r8v10_mech_1", "preset_rx7fd_mech_1"},
+        )
+        self.assertNotIn("entry_list_server_url", server_doc)
+        self.assertNotIn("results_post_url", server_doc)
+        self.assertEqual(season_doc["event"]["track_length"], "3916")
+        self.assertNotIn("max_pit_slot", season_doc["event"])
+
+    def test_server_launcher_0_9_duration_one_imports_laps(self):
+        document = json.loads(
+            Path("tests/fixtures/server_launcher_windows_0_9_sample.json").read_text(encoding="utf-8")
+        )
+        document["Sessions"]["RaceSession"]["Duration"] = 1
+        document["Sessions"]["RaceSession"]["Length"] = 12
+        with tempfile.TemporaryDirectory() as tmp:
+            path = write_launcher_json(Path(tmp), document)
+            _, season_doc, warnings = launch_payloads.build_documents({"SERVER_LAUNCHER_JSON": str(path)})
+
+        self.assertEqual(warnings, [])
+        self.assertEqual(season_doc["game_config"]["race_duration_type"], launch_payloads.RACE_DURATION_TYPE_LAPS)
+        self.assertEqual(season_doc["game_config"]["race_duration"], 12)
 
     def test_server_type_and_tuning_type_env_values(self):
         server_doc, _, warnings, report = launch_payloads.build_documents_with_report(
@@ -689,8 +885,7 @@ class LaunchPayloadTests(unittest.TestCase):
                 "track": "Brands Hatch",
                 "layout": "GP",
                 "event_name": "GP Time Attack",
-                "track_length": 3916,
-                "max_pit_slot": 32,
+                "track_length": "3916",
             },
         )
 
@@ -702,7 +897,8 @@ class LaunchPayloadTests(unittest.TestCase):
         )
         self.assertEqual(warnings_tourist, [])
         self.assertEqual(season_doc_tourist["event"]["layout"], "Touristenfahrten")
-        self.assertEqual(season_doc_tourist["event"]["max_pit_slot"], 50)
+        self.assertEqual(season_doc_tourist["event"]["track_length"], "19300")
+        self.assertNotIn("max_pit_slot", season_doc_tourist["event"])
 
         _, season_doc_kyalami_practice, warnings_kyalami_practice = launch_payloads.build_documents(
             {
@@ -717,8 +913,7 @@ class LaunchPayloadTests(unittest.TestCase):
                 "track": "Kyalami",
                 "layout": "GP",
                 "event_name": "GP Time Attack",
-                "track_length": 4522,
-                "max_pit_slot": 20,
+                "track_length": "4522",
             },
         )
 
@@ -735,8 +930,7 @@ class LaunchPayloadTests(unittest.TestCase):
                 "track": "Kyalami",
                 "layout": "GP",
                 "event_name": "GP Race",
-                "track_length": 4522,
-                "max_pit_slot": 20,
+                "track_length": "4522",
             },
         )
 
@@ -753,8 +947,7 @@ class LaunchPayloadTests(unittest.TestCase):
                 "track": "Nurburgring",
                 "layout": "Nordschleife",
                 "event_name": "Nordschleife Race",
-                "track_length": 20832,
-                "max_pit_slot": 22,
+                "track_length": "20832",
             },
         )
 
@@ -866,8 +1059,9 @@ class LaunchPayloadTests(unittest.TestCase):
 
         payload = launch_payloads.encode_payload(server_doc)
         raw = base64.b64decode(payload)
-        declared_length = struct.unpack("<I", raw[:4])[0]
-        self.assertEqual(declared_length, len(raw) - 4)
+        declared_length = struct.unpack(">I", raw[:4])[0]
+        expected_json = json.dumps(server_doc, separators=(",", ":")).encode("utf-8")
+        self.assertEqual(declared_length, len(expected_json))
         self.assertEqual(raw[4:6], b"x\x01")
 
         decoded = launch_payloads.decode_payload(payload)
@@ -876,6 +1070,56 @@ class LaunchPayloadTests(unittest.TestCase):
         season_payload = launch_payloads.encode_payload(season_doc)
         decoded_season = launch_payloads.decode_payload(season_payload)
         self.assertEqual(decoded_season, season_doc)
+
+    def test_payload_decoder_accepts_legacy_little_endian_frame(self):
+        document = {"legacy": True, "message": "0.8 diagnostic payload"}
+        encoded = json.dumps(document, separators=(",", ":")).encode("utf-8")
+        compressed = zlib.compress(encoded, level=0)
+        payload = base64.b64encode(struct.pack("<I", len(compressed)) + compressed).decode("ascii")
+        self.assertEqual(launch_payloads.decode_payload(payload), document)
+
+    def test_official_0_9_golden_payload_decodes(self):
+        raw = base64.b64decode(OFFICIAL_0_9_MANDATORY_SEASON_PAYLOAD)
+        document = launch_payloads.decode_payload(OFFICIAL_0_9_MANDATORY_SEASON_PAYLOAD)
+        self.assertEqual(struct.unpack(">I", raw[:4])[0], len(zlib.decompress(raw[4:])))
+        self.assertEqual(document["game_type"], "GameModeType_RACE_WEEKEND")
+        self.assertEqual(document["game_config"]["race_duration"], 3000)
+        self.assertEqual(
+            {key: document["game_config"][key] for key in MANDATORY_KEYS},
+            {
+                "mandatory_pit_stop": True,
+                "pit_window": 600,
+                "requires_refuelling": False,
+                "requires_tyre_change": False,
+            },
+        )
+
+    def test_server_payload_uses_0_9_schema(self):
+        server_doc, season_doc, warnings = launch_payloads.build_documents({})
+        self.assertEqual(warnings, [])
+        self.assertEqual(
+            set(server_doc),
+            {
+                "server_tcp_listener_port",
+                "server_udp_listener_port",
+                "server_tcp_internal_port",
+                "server_udp_internal_port",
+                "server_http_port",
+                "server_name",
+                "max_players",
+                "cycle",
+                "allowed_cars_list_full",
+                "driver_password",
+                "spectator_password",
+                "admin_password",
+                "type",
+                "tuning_type",
+                "entry_list_path",
+                "results_path",
+            },
+        )
+        self.assertIsInstance(season_doc["event"]["track_length"], str)
+        self.assertNotIn("max_pit_slot", season_doc["event"])
 
     def test_force_software_rendering_report_default_and_override(self):
         _, _, warnings_default, report_default = launch_payloads.build_documents_with_report({})
@@ -905,7 +1149,7 @@ class LaunchPayloadTests(unittest.TestCase):
         server_doc, _, warnings, report = launch_payloads.build_documents_with_report({})
         self.assertEqual(warnings, [])
         self.assertEqual(selected_car_names(server_doc), all_car_names())
-        self.assertEqual(len(server_doc["allowed_cars_list_full"]), 97)
+        self.assertEqual(len(server_doc["allowed_cars_list_full"]), 100)
         self.assertEqual(resolved(report, "EVENT_CARS")["value"], "all")
         self.assertEqual(resolved(report, "EVENT_CARS")["source"], "default")
         self.assertEqual(resolved(report, "EVENT_CAR_CATEGORY")["value"], "all")
@@ -1002,7 +1246,7 @@ class LaunchPayloadTests(unittest.TestCase):
 
         self.assertEqual(server_doc["entry_list_server_url"], "https://entry.example.test/list.json")
         self.assertEqual(server_doc["results_post_url"], "https://results.example.test/acevo?token=result-secret")
-        self.assertEqual(server_doc["token"], "")
+        self.assertNotIn("token", server_doc)
         self.assertEqual(server_doc["entry_list_path"], "/data/entrylist.json")
         self.assertEqual(server_doc["results_path"], "/data/results")
         self.assertEqual(
@@ -1022,7 +1266,7 @@ class LaunchPayloadTests(unittest.TestCase):
         )
 
         self.assertTrue(any("SERVER_RESULTS_TOKEN" in warning for warning in warnings))
-        self.assertEqual(server_doc["token"], "")
+        self.assertNotIn("token", server_doc)
         self.assertFalse(any(item["key"] == "SERVER_RESULTS_TOKEN" for item in report["resolved_env"]))
 
     def test_sensitive_values_are_masked_in_report(self):

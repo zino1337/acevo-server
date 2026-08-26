@@ -65,6 +65,9 @@ Dashboard priority, so saved `server_launcher.json` values override conflicting 
 settings such as Steam credentials, dashboard auth, update controls, and paths always remain ENV-based. When both sources
 exist, the header shows the active priority and lets you switch back without deleting either configuration.
 
+The official AC EVO 0.9 launcher does not store the Mandatory Pitstop main switch in its JSON. An eligible imported
+file therefore defaults the switch to Off and shows a Dashboard warning until it is explicitly enabled.
+
 ## Ports
 
 `SERVER_TCP_PORT` and `SERVER_UDP_PORT` can be changed, but both must use the same port value or clients cannot connect.
@@ -121,43 +124,47 @@ docker compose -f docker-compose-race.yml up -d
 
 This section is shortened on Docker Hub. See the full table in the GitHub README: https://github.com/zino1337/acevo-server#environment-variables
 
-| Name                                   | Default                        | Description                                        |
-| -------------------------------------- | ------------------------------ | -------------------------------------------------- |
-| `STEAM_USERNAME`                       | empty                          | Steam account name, not email.                     |
-| `STEAM_PASSWORD`                       | empty                          | Steam account password for SteamCMD.               |
-| `STEAM_AUTH_CODE`                      | empty                          | Steam Guard auth code for the next login.          |
-| `SERVER_LAUNCHER_JSON`                 | `/data/server_launcher.json`   | Optional official tool config loaded as base.      |
-| `SERVER_NAME`                          | `AC EVO Nordschleife Trackday` | Public server name.                                |
-| `SERVER_TCP_PORT`                      | `9700`                         | TCP listener port. Must match `SERVER_UDP_PORT`.   |
-| `SERVER_UDP_PORT`                      | `9700`                         | UDP listener port. Must match `SERVER_TCP_PORT`.   |
-| `SERVER_HTTP_PORT`                     | `8080`                         | HTTP/listing port.                                 |
-| `SERVER_MAX_PLAYERS`                   | `20`                           | Maximum player slots; downscaled to track max.     |
-| `SERVER_TYPE`                          | `Ranked`                       | `Ranked` or `Unranked`.                            |
-| `SERVER_TUNING_TYPE`                   | `TuningAllowed`                | `TuningAllowed` or `TuningDenied`.                 |
-| `SERVER_ENTRY_LIST_URL`                | empty                          | Remote entry list URL.                             |
-| `SERVER_ENTRY_LIST_PATH`               | empty                          | Local entry list JSON path.                        |
-| `SERVER_RESULTS_POST_URL`              | empty                          | Result POST endpoint; put auth in URL query.       |
-| `SERVER_RESULTS_PATH`                  | empty                          | Local results save folder.                         |
-| `EVENT_TYPE`                           | `Practice`                     | `Practice` or `Race_Weekend`.                      |
-| `EVENT_TRACK`                          | `Nurburgring_Touristenfahrten` | Track token.                                       |
-| `EVENT_CARS`                           | `all`                          | Comma-separated car names/substrings, or `all`.    |
-| `EVENT_CAR_CATEGORY`                   | `all`                          | Car filters such as `Road`, `Track`, or `EV`.      |
-| `EVENT_BAN_CARS`                       | empty                          | Comma-separated car names/substrings to remove.    |
-| `EVENT_BAN_CAR_CATEGORY`               | empty                          | Comma-separated category filters to remove.        |
-| `PRACTICE_DURATION_MINUTES`            | `180`                          | Practice duration in minutes.                      |
-| `QUALIFY_DURATION_MINUTES`             | `10`                           | Qualify duration in minutes for race weekends.     |
-| `WARMUP_DURATION_MINUTES`              | `5`                            | Warmup duration in minutes for race weekends.      |
-| `RACE_DURATION_MINUTES`                | `25`                           | Race duration in minutes when type is `Time`.      |
-| `RACE_DURATION_LAPS`                   | `10`                           | Race duration in laps when type is `Laps`.         |
-| `RACE_DURATION_TYPE`                   | `Time`                         | Race duration mode: `Time` or `Laps`.              |
-| `RACE_MIN_WAITING_FOR_PLAYERS_SECONDS` | `10`                           | The minimum wait to start the race.                |
-| `RACE_MAX_WAITING_FOR_PLAYERS_SECONDS` | `60`                           | The maximum wait to start the race.                |
-| `AUTO_UPDATE`                          | `true`                         | Container-start update; server restarts skip it.   |
-| `AUTO_START_SERVER`                    | `true`                         | Start the server automatically with the container. |
-| `ACEVO_FORCE_SOFTWARE_RENDERING`       | `true`                         | Enables default no-GPU host compatibility.         |
-| `DASHBOARD_PORT`                       | `8090`                         | Web dashboard port.                                |
-| `DASHBOARD_USER`                       | `admin`                        | Web dashboard Basic Auth username.                 |
-| `DASHBOARD_PASSWORD`                   | empty                          | Web dashboard Basic Auth password; empty = public. |
+| Name                                    | Default                        | Description                                        |
+| --------------------------------------- | ------------------------------ | -------------------------------------------------- |
+| `STEAM_USERNAME`                        | empty                          | Steam account name, not email.                     |
+| `STEAM_PASSWORD`                        | empty                          | Steam account password for SteamCMD.               |
+| `STEAM_AUTH_CODE`                       | empty                          | Steam Guard auth code for the next login.          |
+| `SERVER_LAUNCHER_JSON`                  | `/data/server_launcher.json`   | Optional official tool config loaded as base.      |
+| `SERVER_NAME`                           | `AC EVO Nordschleife Trackday` | Public server name.                                |
+| `SERVER_TCP_PORT`                       | `9700`                         | TCP listener port. Must match `SERVER_UDP_PORT`.   |
+| `SERVER_UDP_PORT`                       | `9700`                         | UDP listener port. Must match `SERVER_TCP_PORT`.   |
+| `SERVER_HTTP_PORT`                      | `8080`                         | HTTP/listing port.                                 |
+| `SERVER_MAX_PLAYERS`                    | `20`                           | Maximum player slots; downscaled to track max.     |
+| `SERVER_TYPE`                           | `Ranked`                       | `Ranked` or `Unranked`.                            |
+| `SERVER_TUNING_TYPE`                    | `TuningAllowed`                | `TuningAllowed` or `TuningDenied`.                 |
+| `SERVER_ENTRY_LIST_URL`                 | empty                          | Remote entry list URL.                             |
+| `SERVER_ENTRY_LIST_PATH`                | empty                          | Local entry list JSON path.                        |
+| `SERVER_RESULTS_POST_URL`               | empty                          | Result POST endpoint; put auth in URL query.       |
+| `SERVER_RESULTS_PATH`                   | empty                          | Local results save folder.                         |
+| `EVENT_TYPE`                            | `Practice`                     | `Practice` or `Race_Weekend`.                      |
+| `EVENT_TRACK`                           | `Nurburgring_Touristenfahrten` | Track token.                                       |
+| `EVENT_CARS`                            | `all`                          | Comma-separated car names/substrings, or `all`.    |
+| `EVENT_CAR_CATEGORY`                    | `all`                          | Car filters such as `Road`, `Track`, or `EV`.      |
+| `EVENT_BAN_CARS`                        | empty                          | Comma-separated car names/substrings to remove.    |
+| `EVENT_BAN_CAR_CATEGORY`                | empty                          | Comma-separated category filters to remove.        |
+| `PRACTICE_DURATION_MINUTES`             | `180`                          | Practice duration in minutes.                      |
+| `QUALIFY_DURATION_MINUTES`              | `10`                           | Qualify duration in minutes for race weekends.     |
+| `WARMUP_DURATION_MINUTES`               | `5`                            | Warmup duration in minutes for race weekends.      |
+| `RACE_DURATION_MINUTES`                 | `25`                           | Race duration in minutes when type is `Time`.      |
+| `RACE_DURATION_LAPS`                    | `10`                           | Race duration in laps when type is `Laps`.         |
+| `RACE_DURATION_TYPE`                    | `Time`                         | Race duration mode: `Time` or `Laps`.              |
+| `RACE_MIN_WAITING_FOR_PLAYERS_SECONDS`  | `10`                           | The minimum wait to start the race.                |
+| `RACE_MAX_WAITING_FOR_PLAYERS_SECONDS`  | `60`                           | The maximum wait to start the race.                |
+| `RACE_MANDATORY_PITSTOP_ENABLED`        | `false`                        | Timed Race Weekend >20 min only.                   |
+| `RACE_MANDATORY_PITSTOP_WINDOW_SECONDS` | `600`                          | Pit window, clamped to the race duration.          |
+| `RACE_MANDATORY_PITSTOP_REFUEL`         | `true`                         | Require refuelling; may be Off with tyre change.   |
+| `RACE_MANDATORY_PITSTOP_TYRE_CHANGE`    | `true`                         | Require tyres; may be Off with refuelling.         |
+| `AUTO_UPDATE`                           | `true`                         | Container-start update; server restarts skip it.   |
+| `AUTO_START_SERVER`                     | `true`                         | Start the server automatically with the container. |
+| `ACEVO_FORCE_SOFTWARE_RENDERING`        | `true`                         | Enables default no-GPU host compatibility.         |
+| `DASHBOARD_PORT`                        | `8090`                         | Web dashboard port.                                |
+| `DASHBOARD_USER`                        | `admin`                        | Web dashboard Basic Auth username.                 |
+| `DASHBOARD_PASSWORD`                    | empty                          | Web dashboard Basic Auth password; empty = public. |
 
 ## Car Categories
 

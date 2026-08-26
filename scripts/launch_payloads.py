@@ -91,6 +91,10 @@ ENV_BASE_KEYS = (
     "RACE_DURATION_LAPS",
     "RACE_MIN_WAITING_FOR_PLAYERS_SECONDS",
     "RACE_MAX_WAITING_FOR_PLAYERS_SECONDS",
+    "RACE_MANDATORY_PITSTOP_ENABLED",
+    "RACE_MANDATORY_PITSTOP_WINDOW_SECONDS",
+    "RACE_MANDATORY_PITSTOP_REFUEL",
+    "RACE_MANDATORY_PITSTOP_TYRE_CHANGE",
     "ACEVO_SERVER_INSTALL_DIR",
 )
 STRICT_TOKEN_ENV_KEYS = {
@@ -113,6 +117,7 @@ ACTIVE_SESSIONS = {
 }
 RACE_DURATION_TYPE_TIME = "GameModeSelectionDuration_TIME"
 RACE_DURATION_TYPE_LAPS = "GameModeSelectionDuration_LAPS"
+MANDATORY_PITSTOP_MIN_RACE_SECONDS = 20 * 60
 
 RUNTIME_KEYS = {
     "config_prefixes": ["SERVER_", "EVENT_", "PRACTICE_", "QUALIFY_", "WARMUP_", "RACE_", "ACEVO_"],
@@ -343,6 +348,12 @@ def warn_unsupported_launcher_fields(launcher: LauncherImport, document: dict) -
             "OvertimeWaitingNextSession",
             "MinWaitingForPlayers",
             "MaxWaitingForPlayers",
+            "WindowTimeMandatoryPitstop",
+            "MandatoryPitStopRefuel",
+            "MandatoryPitStopTyreChange",
+            "MandatoryPitStopEnabled",
+            "EnableTraffic",
+            "SelectedSpawnValue",
         }
         for session_name, session in sessions.items():
             if isinstance(session, dict):
@@ -496,16 +507,52 @@ def map_launcher_sessions(launcher: LauncherImport, sessions: dict) -> None:
         if length_int is None:
             continue
 
-        force_time = bool_from_launcher(session.get("forceTimeDuration", True))
-        if prefix == "RACE" and force_time is False:
+        if "forceTimeDuration" in session:
+            is_laps = bool_from_launcher(session.get("forceTimeDuration")) is False
+        else:
+            duration_mode = int_from_launcher(
+                session.get("Duration", 0),
+                f"Sessions.{session_name}.Duration",
+                launcher,
+            )
+            is_laps = duration_mode == 1
+        if prefix == "RACE" and is_laps:
             launcher.values["RACE_DURATION_TYPE"] = "Laps"
             launcher.values["RACE_DURATION_LAPS"] = length_int
+        else:
+            if prefix == "RACE":
+                launcher.values["RACE_DURATION_TYPE"] = "Time"
+            launcher.values[f"{prefix}_DURATION_MINUTES"] = length_int / 60
+            launcher.duration_seconds[prefix] = length_int
+
+        if prefix != "RACE":
             continue
 
-        if prefix == "RACE":
-            launcher.values["RACE_DURATION_TYPE"] = "Time"
-        launcher.values[f"{prefix}_DURATION_MINUTES"] = length_int / 60
-        launcher.duration_seconds[prefix] = length_int
+        if "MandatoryPitStopEnabled" in session:
+            launcher.values["RACE_MANDATORY_PITSTOP_ENABLED"] = session["MandatoryPitStopEnabled"]
+        elif not is_laps and length_int > MANDATORY_PITSTOP_MIN_RACE_SECONDS:
+            launcher.warnings.append(
+                "server_launcher.json: the official 0.9 launcher does not serialize the mandatory pitstop "
+                "enabled state; defaulting it to Off."
+            )
+        append_if_present(
+            launcher.values,
+            "RACE_MANDATORY_PITSTOP_WINDOW_SECONDS",
+            session,
+            "WindowTimeMandatoryPitstop",
+        )
+        append_if_present(
+            launcher.values,
+            "RACE_MANDATORY_PITSTOP_REFUEL",
+            session,
+            "MandatoryPitStopRefuel",
+        )
+        append_if_present(
+            launcher.values,
+            "RACE_MANDATORY_PITSTOP_TYRE_CHANGE",
+            session,
+            "MandatoryPitStopTyreChange",
+        )
 
 
 def config_state_path(env: dict[str, str]) -> Path:
@@ -1188,16 +1235,6 @@ def selected_car_payload(state: EnvState, car_name: str) -> dict:
 def build_server_doc(state: EnvState, cfg: dict, event_type: str, selected_cars: list[str], track: dict) -> dict:
     defaults = cfg["server_defaults"]
 
-    launch_path_by_event_type = {
-        "GameModeType_PRACTICE": "content\\\\data\\\\practice.seasondefinition",
-        "GameModeType_RACE_WEEKEND": "content\\\\data\\\\race_weekend.seasondefinition",
-    }
-
-    launch_path = launch_path_by_event_type.get(
-        event_type,
-        launch_path_by_event_type[cfg["event_defaults"]["type"]],
-    )
-
     server_name = state.string("SERVER_NAME", defaults["server_name"])
     server_type = state.enum("SERVER_TYPE", cfg["mappings"]["server_type"], defaults["server_type"])
     tuning_type = state.enum("SERVER_TUNING_TYPE", cfg["mappings"]["tuning_type"], defaults["tuning_type"])
@@ -1218,39 +1255,100 @@ def build_server_doc(state: EnvState, cfg: dict, event_type: str, selected_cars:
     tcp_port = state.integer("SERVER_TCP_PORT", int(defaults["tcp_port"]))
     udp_port = state.integer("SERVER_UDP_PORT", int(defaults["udp_port"]))
     http_port = state.integer("SERVER_HTTP_PORT", int(defaults["http_port"]))
+    entry_list_url = state.string("SERVER_ENTRY_LIST_URL", "", allow_empty=True)
+    results_post_url = state.string("SERVER_RESULTS_POST_URL", "", allow_empty=True)
 
-    return {
+    document = {
         "server_tcp_listener_port": tcp_port,
         "server_udp_listener_port": udp_port,
         "server_tcp_internal_port": tcp_port,
         "server_udp_internal_port": udp_port,
         "server_http_port": http_port,
         "server_name": server_name,
-        "launch_path": launch_path,
-        "netcode_update_interval": 20,
+        "max_players": max_players,
+        "cycle": state.boolean("SERVER_CYCLE_ENABLED", bool(defaults["cycle_enabled"])),
+        "allowed_cars_list_full": [selected_car_payload(state, car_name) for car_name in selected_cars],
         "driver_password": state.string("SERVER_DRIVER_PASSWORD", defaults["driver_password"], allow_empty=True),
         "spectator_password": state.string(
             "SERVER_SPECTATOR_PASSWORD",
             defaults["spectator_password"],
             allow_empty=True,
         ),
-        "max_players": max_players,
-        "allowed_cars_list_full": [selected_car_payload(state, car_name) for car_name in selected_cars],
-        "type": server_type,
-        "cycle": state.boolean("SERVER_CYCLE_ENABLED", bool(defaults["cycle_enabled"])),
         "admin_password": state.string("SERVER_ADMIN_PASSWORD", defaults["admin_password"], allow_empty=True),
-        "pi_min": 0.0,
-        "pi_max": 100.0,
-        "property_1": False,
-        "property_2": False,
-        "property_3": False,
-        "entry_list_server_url": state.string("SERVER_ENTRY_LIST_URL", "", allow_empty=True),
-        "results_post_url": state.string("SERVER_RESULTS_POST_URL", "", allow_empty=True),
-        "token": "",
+        "type": server_type,
         "tuning_type": tuning_type,
         "entry_list_path": state.string("SERVER_ENTRY_LIST_PATH", "", allow_empty=True),
         "results_path": state.string("SERVER_RESULTS_PATH", "", allow_empty=True),
     }
+    if entry_list_url:
+        document["entry_list_server_url"] = entry_list_url
+    if results_post_url:
+        document["results_post_url"] = results_post_url
+    return document
+
+
+def add_mandatory_pitstop_config(
+    state: EnvState,
+    cfg: dict,
+    sessions: dict[str, dict],
+    event_type: str,
+    race_duration_type: str,
+    game: dict[str, object],
+) -> None:
+    defaults = cfg["session_defaults"]["RACE"]
+    enabled = state.boolean(
+        "RACE_MANDATORY_PITSTOP_ENABLED",
+        bool(defaults.get("mandatory_pitstop_enabled", False)),
+    )
+    window = state.integer(
+        "RACE_MANDATORY_PITSTOP_WINDOW_SECONDS",
+        int(defaults.get("mandatory_pitstop_window_seconds", 600)),
+    )
+    requires_refuelling = state.boolean(
+        "RACE_MANDATORY_PITSTOP_REFUEL",
+        bool(defaults.get("mandatory_pitstop_refuel", True)),
+    )
+    requires_tyre_change = state.boolean(
+        "RACE_MANDATORY_PITSTOP_TYRE_CHANGE",
+        bool(defaults.get("mandatory_pitstop_tyre_change", True)),
+    )
+
+    race_seconds = int(sessions["RACE"]["DURATION_SECONDS"])
+    eligible = (
+        event_type == "GameModeType_RACE_WEEKEND"
+        and race_duration_type == RACE_DURATION_TYPE_TIME
+        and race_seconds > MANDATORY_PITSTOP_MIN_RACE_SECONDS
+    )
+    if not eligible:
+        if enabled:
+            state.warn(
+                "RACE_MANDATORY_PITSTOP_ENABLED: mandatory pitstops require a Race Weekend timed race "
+                "longer than 1200 seconds; disabling."
+            )
+            state.set(
+                "RACE_MANDATORY_PITSTOP_ENABLED",
+                False,
+                "fallback",
+                "requires Race Weekend, Time mode, and race duration above 1200 seconds",
+            )
+        return
+    if not enabled:
+        return
+
+    bounded_window = min(max(window, 1), race_seconds)
+    if bounded_window != window:
+        state.warn(f"RACE_MANDATORY_PITSTOP_WINDOW_SECONDS: {window} outside 1-{race_seconds}; using {bounded_window}.")
+        state.set(
+            "RACE_MANDATORY_PITSTOP_WINDOW_SECONDS",
+            bounded_window,
+            "fallback",
+            f"clamped to 1-{race_seconds}",
+        )
+
+    game["mandatory_pit_stop"] = True
+    game["pit_window"] = bounded_window
+    game["requires_refuelling"] = requires_refuelling
+    game["requires_tyre_change"] = requires_tyre_change
 
 
 def build_game_config(
@@ -1298,6 +1396,7 @@ def build_game_config(
         )
     game["min_waiting_for_players"] = min_waiting
     game["max_waiting_for_players"] = max_waiting
+    add_mandatory_pitstop_config(state, cfg, sessions, event_type, race_duration_type, game)
     return game
 
 
@@ -1306,10 +1405,16 @@ def build_season_doc(
 ) -> dict:
     defaults = cfg["event_defaults"]
     mappings = cfg["mappings"]
+    event = {
+        "track": str(track["track"]),
+        "layout": str(track["layout"]),
+        "event_name": str(track["event_name"]),
+        "track_length": str(track["track_length"]),
+    }
     return {
         "game_type": event_type,
         "game_config": build_game_config(state, cfg, sessions, event_type, race_duration_type),
-        "event": track,
+        "event": event,
         "weather_type": state.enum("EVENT_WEATHER", mappings["weather"], defaults["weather"]),
         "weather_behaviour": state.enum(
             "EVENT_WEATHER_BEHAVIOUR",
@@ -1342,7 +1447,10 @@ def build_report(cfg: dict, state: EnvState, server_doc: dict, season_doc: dict)
             },
             "max_players": server_doc["max_players"],
             "cycle": server_doc["cycle"],
-            "launch_path": server_doc["launch_path"],
+            "launch_path": {
+                "GameModeType_PRACTICE": "content\\\\data\\\\practice.seasondefinition",
+                "GameModeType_RACE_WEEKEND": "content\\\\data\\\\race_weekend.seasondefinition",
+            }.get(season_doc["game_type"], ""),
             "car_count": len(server_doc["allowed_cars_list_full"]),
         },
         "season_summary": {
@@ -1390,22 +1498,33 @@ def build_documents(env: dict[str, str]) -> tuple[dict, dict, list[str]]:
 
 
 def encode_payload(document: dict) -> str:
-    # AC EVO 0.8.1 intermittently exits while reading some Huffman-coded
+    # AC EVO intermittently exits while reading some Huffman-coded
     # payloads. Stored DEFLATE blocks keep the standard zlib envelope while
     # avoiding that data-dependent native decoder path.
-    compressed = zlib.compress(json.dumps(document, separators=(",", ":")).encode("utf-8"), level=0)
-    return base64.b64encode(struct.pack("<I", len(compressed)) + compressed).decode("ascii")
+    encoded = json.dumps(document, separators=(",", ":")).encode("utf-8")
+    compressed = zlib.compress(encoded, level=0)
+    return base64.b64encode(struct.pack(">I", len(encoded)) + compressed).decode("ascii")
 
 
 def decode_payload(payload: str) -> dict:
     raw = base64.b64decode(payload)
     if len(raw) < 4:
         raise ValueError("Payload shorter than length prefix.")
-    expected = struct.unpack("<I", raw[:4])[0]
     compressed = raw[4:]
-    if expected != len(compressed):
-        raise ValueError(f"Length prefix mismatch: expected {expected}, got {len(compressed)}.")
-    return json.loads(zlib.decompress(compressed).decode("utf-8"))
+    decoded = zlib.decompress(compressed)
+    expected_uncompressed = struct.unpack(">I", raw[:4])[0]
+    if expected_uncompressed == len(decoded):
+        return json.loads(decoded.decode("utf-8"))
+
+    expected_legacy_compressed = struct.unpack("<I", raw[:4])[0]
+    if expected_legacy_compressed == len(compressed):
+        return json.loads(decoded.decode("utf-8"))
+
+    raise ValueError(
+        "Length prefix mismatch: "
+        f"0.9 expected {expected_uncompressed} uncompressed bytes, got {len(decoded)}; "
+        f"legacy expected {expected_legacy_compressed} compressed bytes, got {len(compressed)}."
+    )
 
 
 def main(argv: list[str]) -> int:

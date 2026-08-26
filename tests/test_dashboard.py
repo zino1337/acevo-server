@@ -16,6 +16,7 @@ from dashboard import app, config_io, live, metadata, mods, server_control
 from scripts import launch_payloads
 
 FIXTURE = Path(__file__).parent / "fixtures" / "server_launcher_windows_sample.json"
+FIXTURE_0_9 = Path(__file__).parent / "fixtures" / "server_launcher_windows_0_9_sample.json"
 
 
 def load_fixture():
@@ -50,7 +51,7 @@ class MetadataTests(unittest.TestCase):
 
     def test_public_server_racing_classes(self):
         cars = {car["display_name"]: car["classes"] for car in metadata.build_metadata()["cars"]}
-        expected_counts = {"f1": 2, "gt3": 6, "gt2": 5, "gt4": 3, "cup": 10}
+        expected_counts = {"f1": 2, "gt3": 6, "gt2": 6, "gt4": 3, "cup": 10}
         for class_name, expected in expected_counts.items():
             self.assertEqual(sum(class_name in classes for classes in cars.values()), expected, class_name)
 
@@ -91,6 +92,15 @@ class RoundTripTests(unittest.TestCase):
         self.assertEqual(race["laps"], 12)
         _, season = summary(config_io.validate(form))
         self.assertEqual(season["durations"]["race"], 12)  # laps, not seconds
+
+    def test_official_0_9_file_imports_without_assuming_mandatory_enabled(self):
+        form = config_io.launcher_to_form(json.loads(FIXTURE_0_9.read_text(encoding="utf-8")))
+        race = form["sessions"]["race"]
+        self.assertEqual(race["duration_type"], launch_payloads.RACE_DURATION_TYPE_TIME)
+        self.assertEqual(race["length_sec"], 3000)
+        self.assertFalse(race["mandatory_pitstop_enabled"])
+        self.assertFalse(race["mandatory_pitstop_refuel"])
+        self.assertFalse(race["mandatory_pitstop_tyre_change"])
 
 
 class FormToLauncherTests(unittest.TestCase):
@@ -169,21 +179,66 @@ class FormToLauncherTests(unittest.TestCase):
         practice = doc["Sessions"]["PracticeSession"]
         self.assertEqual(practice["Length"], 1234)
         self.assertEqual(practice["Duration"], 0)
-        self.assertTrue(practice["forceTimeDuration"])
+        self.assertNotIn("forceTimeDuration", practice)
 
-    def test_race_time_vs_laps_force_time_duration(self):
+    def test_race_time_vs_laps_duration_mapping(self):
         form = self.base_form("GameModeType_RACE_WEEKEND")
         form["sessions"]["race"]["duration_type"] = launch_payloads.MAPPINGS["duration_type"]["laps"]
         form["sessions"]["race"]["laps"] = 8
         race = config_io.form_to_launcher(form)["Sessions"]["RaceSession"]
-        self.assertFalse(race["forceTimeDuration"])
+        self.assertEqual(race["Duration"], 1)
         self.assertEqual(race["Length"], 8)
+        self.assertNotIn("forceTimeDuration", race)
 
         form["sessions"]["race"]["duration_type"] = launch_payloads.MAPPINGS["duration_type"]["time"]
         form["sessions"]["race"]["length_sec"] = 1800
         race = config_io.form_to_launcher(form)["Sessions"]["RaceSession"]
-        self.assertTrue(race["forceTimeDuration"])
+        self.assertEqual(race["Duration"], 0)
         self.assertEqual(race["Length"], 1800)
+        self.assertNotIn("forceTimeDuration", race)
+
+    def test_mandatory_pitstop_extension_round_trips_and_clamps(self):
+        form = self.base_form("GameModeType_RACE_WEEKEND")
+        race = form["sessions"]["race"]
+        race.update(
+            {
+                "duration_type": launch_payloads.RACE_DURATION_TYPE_TIME,
+                "length_sec": 1800,
+                "mandatory_pitstop_enabled": True,
+                "mandatory_pitstop_window_seconds": 9999,
+                "mandatory_pitstop_refuel": False,
+                "mandatory_pitstop_tyre_change": False,
+            }
+        )
+        doc = config_io.form_to_launcher(form)
+        saved = doc["Sessions"]["RaceSession"]
+        self.assertTrue(saved["MandatoryPitStopEnabled"])
+        self.assertEqual(saved["WindowTimeMandatoryPitstop"], 1800)
+        self.assertFalse(saved["MandatoryPitStopRefuel"])
+        self.assertFalse(saved["MandatoryPitStopTyreChange"])
+
+        reloaded = config_io.launcher_to_form(doc)["sessions"]["race"]
+        self.assertTrue(reloaded["mandatory_pitstop_enabled"])
+        self.assertEqual(reloaded["mandatory_pitstop_window_seconds"], 1800)
+        result = config_io.validate(form)
+        self.assertEqual(result["warnings"], [])
+
+    def test_mandatory_pitstop_extension_is_disabled_for_ineligible_race(self):
+        form = self.base_form("GameModeType_RACE_WEEKEND")
+        form["sessions"]["race"].update(
+            {
+                "duration_type": launch_payloads.RACE_DURATION_TYPE_TIME,
+                "length_sec": 1200,
+                "mandatory_pitstop_enabled": True,
+            }
+        )
+        race = config_io.form_to_launcher(form)["Sessions"]["RaceSession"]
+        self.assertFalse(race["MandatoryPitStopEnabled"])
+
+    def test_official_0_9_missing_extension_has_visible_source_warning(self):
+        info = config_io.config_source_info(FIXTURE_0_9, {})
+        self.assertIn("does not store the Mandatory Pitstop main switch", info["source_warning"])
+        self.assertIn("imported as Off", info["source_warning"])
 
     def test_max_players_limit_from_track_pit(self):
         meta = metadata.build_metadata()
@@ -357,6 +412,30 @@ class ProfilesTests(unittest.TestCase):
 
 
 class RuntimeFormTests(unittest.TestCase):
+    def test_effective_runtime_form_includes_mandatory_pitstop_env_values(self):
+        cfg = launch_payloads.load_config()
+        race_track = next(iter(cfg["tracks_by_event"]["GameModeType_RACE_WEEKEND"].values()))
+        form = config_io.effective_runtime_form(
+            Path("does-not-exist-12345.json"),
+            {
+                "EVENT_TYPE": "Race_Weekend",
+                "EVENT_TRACK": launch_payloads.track_env_token(race_track),
+                "RACE_DURATION_TYPE": "Time",
+                "RACE_DURATION_MINUTES": "25",
+                "RACE_MANDATORY_PITSTOP_ENABLED": "true",
+                "RACE_MANDATORY_PITSTOP_WINDOW_SECONDS": "500",
+                "RACE_MANDATORY_PITSTOP_REFUEL": "false",
+                "RACE_MANDATORY_PITSTOP_TYRE_CHANGE": "true",
+            },
+            cfg,
+        )
+        race = form["sessions"]["race"]
+        self.assertTrue(race["mandatory_pitstop_enabled"])
+        self.assertEqual(race["mandatory_pitstop_window_seconds"], 500)
+        self.assertFalse(race["mandatory_pitstop_refuel"])
+        self.assertTrue(race["mandatory_pitstop_tyre_change"])
+        self.assertEqual(form["server"]["max_players_limit"], race_track["max_pit_slot"])
+
     def test_effective_runtime_form_uses_env_values(self):
         cfg = launch_payloads.load_config()
         race_track = next(iter(cfg["tracks_by_event"]["GameModeType_RACE_WEEKEND"].values()))
@@ -626,6 +705,16 @@ class BasicAuthTests(unittest.TestCase):
 
 
 class FrontendStaticTests(unittest.TestCase):
+    def test_mandatory_pitstop_controls_apply_eligibility_and_disabled_states(self):
+        source = (Path(__file__).parents[1] / "dashboard" / "static" / "app.js").read_text(encoding="utf-8")
+        self.assertIn("Mandatory pitstop (timed races over 20 minutes)", source)
+        self.assertIn("Mandatory pitstop requires refuelling", source)
+        self.assertIn("Mandatory pitstop requires tyre change", source)
+        self.assertIn("Mandatory pitstop window [sec]", source)
+        self.assertIn("const mandatoryEligible = timedRace && Number(s.length_sec) > 1200", source)
+        self.assertIn("{ disabled: !mandatoryEligible }", source)
+        self.assertIn("{ disabled: !mandatoryEnabled }", source)
+
     def test_configuration_priority_flow_is_explicit_and_preflights_apply(self):
         static = Path(__file__).parents[1] / "dashboard" / "static"
         html = (static / "index.html").read_text(encoding="utf-8")
