@@ -14,7 +14,7 @@ services:
       - .env
     environment:
       - EVENT_TYPE=Race_Weekend
-      - EVENT_TRACK=Brands Hatch GP
+      - EVENT_TRACK=Brands_Hatch_GP
       - PRACTICE_DURATION_MINUTES=0
       - QUALIFY_DURATION_MINUTES=10
       - WARMUP_DURATION_MINUTES=0

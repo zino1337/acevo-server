@@ -67,7 +67,11 @@
       "max_wait_to_box_seconds": 60,
       "overtime_waiting_next_session_seconds": 10,
       "min_waiting_for_players_seconds": 10,
-      "max_waiting_for_players_seconds": 60
+      "max_waiting_for_players_seconds": 60,
+      "mandatory_pitstop_enabled": false,
+      "mandatory_pitstop_window_seconds": 600,
+      "mandatory_pitstop_refuel": true,
+      "mandatory_pitstop_tyre_change": true
     }
   }
 }

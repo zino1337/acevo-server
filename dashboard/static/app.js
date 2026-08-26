@@ -169,7 +169,7 @@ function full(node) {
   return node;
 }
 
-function textField({ label, value, type = "text", oninput, suffix, min, max, step }) {
+function textField({ label, value, type = "text", oninput, onchange, suffix, min, max, step, disabled = false }) {
   const field = document.createElement("md-outlined-text-field");
   field.label = label;
   field.value = value == null ? "" : String(value);
@@ -178,7 +178,9 @@ function textField({ label, value, type = "text", oninput, suffix, min, max, ste
   if (min != null) field.min = min;
   if (max != null) field.max = max;
   if (step != null) field.step = step;
-  field.addEventListener("input", () => oninput(field.value, field));
+  field.disabled = disabled;
+  if (oninput) field.addEventListener("input", () => oninput(field.value, field));
+  if (onchange) field.addEventListener("change", () => onchange(field.value, field));
   return field;
 }
 
@@ -200,13 +202,14 @@ function selectField({ label, value, options, onchange }) {
   return select;
 }
 
-function switchRow(label, checked, onchange) {
+function switchRow(label, checked, onchange, { disabled = false } = {}) {
   const row = document.createElement("div");
   row.className = "switch-row full";
   const span = document.createElement("span");
   span.textContent = label;
   const sw = document.createElement("md-switch");
   sw.selected = !!checked;
+  sw.disabled = disabled;
   sw.addEventListener("change", () => onchange(sw.selected));
   row.append(span, sw);
   return row;
@@ -425,6 +428,7 @@ function renderEvent() {
         lastTrackPerMode.set(e.type, e.track);
         const previousTrack = e.track;
         e.type = v;
+        if (!/RACE_WEEKEND/i.test(v)) state.sessions.race.mandatory_pitstop_enabled = false;
         const tracks = trackList();
         const remembered = lastTrackPerMode.get(v);
         e.track = preferredTrack(tracks, previousTrack, remembered);
@@ -811,6 +815,7 @@ function sessionCard(key, title) {
         options: META.enums.duration_type,
         onchange: (v) => {
           s.duration_type = v;
+          if (/LAPS/i.test(v)) s.mandatory_pitstop_enabled = false;
           renderSessions();
           scheduleValidate();
         },
@@ -820,7 +825,18 @@ function sessionCard(key, title) {
       grid.append(numberField({ label: "Laps", value: s.laps, min: 1, oninput: (v) => set(s, "laps", +v) }));
     } else {
       grid.append(
-        numberField({ label: "Duration [sec]", value: s.length_sec, min: 0, oninput: (v) => set(s, "length_sec", +v) }),
+        numberField({
+          label: "Duration [sec]",
+          value: s.length_sec,
+          min: 0,
+          oninput: (v) => set(s, "length_sec", +v),
+          onchange: (v) => {
+            if (+v <= 1200) s.mandatory_pitstop_enabled = false;
+            if (+v > 0) s.mandatory_pitstop_window_seconds = Math.min(s.mandatory_pitstop_window_seconds, +v);
+            renderSessions();
+            scheduleValidate();
+          },
+        }),
       );
     }
   } else {
@@ -857,6 +873,10 @@ function sessionCard(key, title) {
   );
 
   if (key === "race") {
+    const timedRace = !/LAPS/i.test(s.duration_type);
+    const mandatoryEligible = timedRace && Number(s.length_sec) > 1200;
+    if (!mandatoryEligible) s.mandatory_pitstop_enabled = false;
+    const mandatoryEnabled = mandatoryEligible && !!s.mandatory_pitstop_enabled;
     grid.append(
       numberField({
         label: "Min waiting players [sec]",
@@ -870,6 +890,41 @@ function sessionCard(key, title) {
         min: 0,
         oninput: (v) => set(s, "max_waiting_for_players", +v),
       }),
+      switchRow(
+        "Mandatory pitstop (timed races over 20 minutes)",
+        mandatoryEnabled,
+        (v) => {
+          s.mandatory_pitstop_enabled = v;
+          renderSessions();
+          scheduleValidate();
+        },
+        { disabled: !mandatoryEligible },
+      ),
+      switchRow(
+        "Mandatory pitstop requires refuelling",
+        s.mandatory_pitstop_refuel,
+        (v) => set(s, "mandatory_pitstop_refuel", v),
+        { disabled: !mandatoryEnabled },
+      ),
+      switchRow(
+        "Mandatory pitstop requires tyre change",
+        s.mandatory_pitstop_tyre_change,
+        (v) => set(s, "mandatory_pitstop_tyre_change", v),
+        { disabled: !mandatoryEnabled },
+      ),
+      full(
+        numberField({
+          label: "Mandatory pitstop window [sec]",
+          value: s.mandatory_pitstop_window_seconds,
+          min: 1,
+          max: Math.max(1, Number(s.length_sec) || 1),
+          disabled: !mandatoryEnabled,
+          oninput: (v) => {
+            s.mandatory_pitstop_window_seconds = Math.min(Math.max(+v || 1, 1), Number(s.length_sec));
+            scheduleValidate();
+          },
+        }),
+      ),
     );
   }
 

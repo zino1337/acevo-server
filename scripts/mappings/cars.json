@@ -56,9 +56,17 @@
     "property_3": 1
   },
   {
+    "display_name": "Audi R8 LMS GT2 - GT2",
+    "internal_name": "preset_r8gt2_mech_1",
+    "performance_indicator": 17.9,
+    "property_1": 1,
+    "property_2": 0,
+    "property_3": 0
+  },
+  {
     "display_name": "Audi R8 LMS GT3 Evo II - GT3",
     "internal_name": "preset_r8gt3_mech_1",
-    "performance_indicator": 20.6,
+    "performance_indicator": 19.5,
     "property_1": 1,
     "property_2": 0,
     "property_3": 0
@@ -66,15 +74,23 @@
   {
     "display_name": "Audi R8 LMS GT4 Evo - GT4",
     "internal_name": "preset_r8gt4_mech_1",
-    "performance_indicator": 15.6,
+    "performance_indicator": 14.7,
     "property_1": 1,
+    "property_2": 0,
+    "property_3": 0
+  },
+  {
+    "display_name": "Audi R8 V10 performance quattro - Coupe quattro",
+    "internal_name": "preset_r8v10_mech_1",
+    "performance_indicator": 13.5,
+    "property_1": 0,
     "property_2": 0,
     "property_3": 0
   },
   {
     "display_name": "Audi RS 3 Sportback - Sportback",
     "internal_name": "preset_rs3_mech_1",
-    "performance_indicator": 12.2,
+    "performance_indicator": 11.5,
     "property_1": 0,
     "property_2": 0,
     "property_3": 0
@@ -82,7 +98,7 @@
   {
     "display_name": "Audi RS 6 Avant - Standard",
     "internal_name": "preset_rs6_mech_1",
-    "performance_indicator": 12.2,
+    "performance_indicator": 11.9,
     "property_1": 0,
     "property_2": 0,
     "property_3": 0
@@ -90,7 +106,7 @@
   {
     "display_name": "Audi Sport quattro - Standard",
     "internal_name": "preset_sq_mech_1",
-    "performance_indicator": 10.7,
+    "performance_indicator": 10.8,
     "property_1": 0,
     "property_2": 1,
     "property_3": 0
@@ -114,7 +130,7 @@
   {
     "display_name": "BMW M2 CS Racing - 350",
     "internal_name": "preset_m2csr_mech_1",
-    "performance_indicator": 13.1,
+    "performance_indicator": 11.7,
     "property_1": 1,
     "property_2": 0,
     "property_3": 0
@@ -122,7 +138,7 @@
   {
     "display_name": "BMW M2 CS Racing - 450",
     "internal_name": "preset_m2csr_mech_2",
-    "performance_indicator": 13.5,
+    "performance_indicator": 12,
     "property_1": 1,
     "property_2": 0,
     "property_3": 0
@@ -154,7 +170,7 @@
   {
     "display_name": "BMW M4 GT3 Evo - GT3",
     "internal_name": "preset_m4gt3_mech_1",
-    "performance_indicator": 21.1,
+    "performance_indicator": 20,
     "property_1": 1,
     "property_2": 0,
     "property_3": 0
@@ -218,7 +234,7 @@
   {
     "display_name": "Dallara EXP - Standard",
     "internal_name": "preset_dalexp_mech_1",
-    "performance_indicator": 22.6,
+    "performance_indicator": 21.6,
     "property_1": 2,
     "property_2": 0,
     "property_3": 0
@@ -242,7 +258,7 @@
   {
     "display_name": "Dallara Stradale - Track",
     "internal_name": "preset_dalsc_mech_3",
-    "performance_indicator": 21.3,
+    "performance_indicator": 20.4,
     "property_1": 0,
     "property_2": 0,
     "property_3": 0
@@ -274,7 +290,7 @@
   {
     "display_name": "Ferrari 296 GT3 - GT3",
     "internal_name": "preset_296gt3_mech_1",
-    "performance_indicator": 22.3,
+    "performance_indicator": 21.2,
     "property_1": 1,
     "property_2": 0,
     "property_3": 0
@@ -298,7 +314,7 @@
   {
     "display_name": "Ferrari 488 Challenge Evo - Ferrari Challenge",
     "internal_name": "preset_f488ce_mech_1",
-    "performance_indicator": 20.2,
+    "performance_indicator": 19.1,
     "property_1": 1,
     "property_2": 0,
     "property_3": 0
@@ -322,7 +338,7 @@
   {
     "display_name": "Ferrari F40 LM - Standard",
     "internal_name": "preset_f40lm_mech_1",
-    "performance_indicator": 20.2,
+    "performance_indicator": 19.2,
     "property_1": 1,
     "property_2": 2,
     "property_3": 0
@@ -346,7 +362,7 @@
   {
     "display_name": "Ford Mustang GT3 - GT3",
     "internal_name": "preset_msggt3_mech_1",
-    "performance_indicator": 19.4,
+    "performance_indicator": 18.3,
     "property_1": 1,
     "property_2": 0,
     "property_3": 0
@@ -354,7 +370,7 @@
   {
     "display_name": "Honda NSX-R 92R - Standard",
     "internal_name": "preset_nsxr_mech_1",
-    "performance_indicator": 10.8,
+    "performance_indicator": 9.9,
     "property_1": 0,
     "property_2": 2,
     "property_3": 0
@@ -386,7 +402,7 @@
   {
     "display_name": "KTM X-Bow GT2 - GT2",
     "internal_name": "preset_xbgt2_mech_1",
-    "performance_indicator": 19.3,
+    "performance_indicator": 18.2,
     "property_1": 1,
     "property_2": 0,
     "property_3": 0
@@ -394,7 +410,7 @@
   {
     "display_name": "KTM X-Bow GT4 - GT4",
     "internal_name": "preset_xbgt4_mech_1",
-    "performance_indicator": 19,
+    "performance_indicator": 18,
     "property_1": 1,
     "property_2": 0,
     "property_3": 0
@@ -408,15 +424,15 @@
     "property_3": 0
   },
   {
-    "display_name": "Lamborghini Huracan ST EVO2 - Super Trofeo",
+    "display_name": "Lamborghini Huracán ST EVO2 - Super Trofeo",
     "internal_name": "preset_stevo2_mech_1",
-    "performance_indicator": 18.4,
+    "performance_indicator": 17.4,
     "property_1": 1,
     "property_2": 0,
     "property_3": 0
   },
   {
-    "display_name": "Lamborghini Huracan STO - Road",
+    "display_name": "Lamborghini Huracán STO - Road",
     "internal_name": "preset_sto_mech_1",
     "performance_indicator": 15.1,
     "property_1": 0,
@@ -424,7 +440,7 @@
     "property_3": 0
   },
   {
-    "display_name": "Lamborghini Huracan STO - Trackday",
+    "display_name": "Lamborghini Huracán STO - Trackday",
     "internal_name": "preset_sto_mech_2",
     "performance_indicator": 15.1,
     "property_1": 0,
@@ -466,7 +482,7 @@
   {
     "display_name": "Lotus Exige V6 Cup - Lotus Motorsport",
     "internal_name": "preset_exigev6_mech_2",
-    "performance_indicator": 14.6,
+    "performance_indicator": 13.9,
     "property_1": 0,
     "property_2": 0,
     "property_3": 0
@@ -474,7 +490,7 @@
   {
     "display_name": "Lotus Exige V6 Cup - Standard",
     "internal_name": "preset_exigev6_mech_1",
-    "performance_indicator": 13.3,
+    "performance_indicator": 12.6,
     "property_1": 0,
     "property_2": 0,
     "property_3": 0
@@ -482,7 +498,7 @@
   {
     "display_name": "Maserati GT2 - GT2",
     "internal_name": "preset_mcgt2_mech_1",
-    "performance_indicator": 17.7,
+    "performance_indicator": 16.7,
     "property_1": 1,
     "property_2": 0,
     "property_3": 0
@@ -506,7 +522,7 @@
   {
     "display_name": "Mazda MX-5 ND Cup - Global Cup ND1",
     "internal_name": "preset_mx5ndcup_mech_1",
-    "performance_indicator": 10.9,
+    "performance_indicator": 10.1,
     "property_1": 1,
     "property_2": 0,
     "property_3": 0
@@ -514,15 +530,23 @@
   {
     "display_name": "Mazda MX-5 ND Cup - Global Cup ND2",
     "internal_name": "preset_mx5ndcup_mech_2",
-    "performance_indicator": 11.2,
+    "performance_indicator": 10.4,
     "property_1": 1,
     "property_2": 0,
     "property_3": 0
   },
   {
+    "display_name": "Mazda RX-7 FD Spirit R - Standard",
+    "internal_name": "preset_rx7fd_mech_1",
+    "performance_indicator": 9.8,
+    "property_1": 0,
+    "property_2": 2,
+    "property_3": 0
+  },
+  {
     "display_name": "Mercedes-AMG GT2 - GT2",
     "internal_name": "preset_amggt2_mech_1",
-    "performance_indicator": 18,
+    "performance_indicator": 17,
     "property_1": 1,
     "property_2": 0,
     "property_3": 0
@@ -562,7 +586,7 @@
   {
     "display_name": "Porsche 718 Cayman GT4 Clubsport - GT4",
     "internal_name": "preset_gt4csmr_mech_1",
-    "performance_indicator": 16.3,
+    "performance_indicator": 15.4,
     "property_1": 1,
     "property_2": 0,
     "property_3": 0
@@ -586,7 +610,7 @@
   {
     "display_name": "Porsche 911 GT2 RS Clubsport Evo (991II) - GT2",
     "internal_name": "preset_gt2rscs_mech_1",
-    "performance_indicator": 18.2,
+    "performance_indicator": 17.2,
     "property_1": 1,
     "property_2": 0,
     "property_3": 0
@@ -594,7 +618,7 @@
   {
     "display_name": "Porsche 911 GT3 Cup (992) - ABS",
     "internal_name": "preset_992c_mech_2",
-    "performance_indicator": 17.3,
+    "performance_indicator": 16.3,
     "property_1": 1,
     "property_2": 0,
     "property_3": 0
@@ -602,7 +626,7 @@
   {
     "display_name": "Porsche 911 GT3 Cup (992) - ABS TC",
     "internal_name": "preset_992c_mech_1",
-    "performance_indicator": 17.3,
+    "performance_indicator": 16.3,
     "property_1": 1,
     "property_2": 0,
     "property_3": 0
@@ -610,7 +634,7 @@
   {
     "display_name": "Porsche 911 GT3 Cup (992) - No ABS No TC",
     "internal_name": "preset_992c_mech_3",
-    "performance_indicator": 17.3,
+    "performance_indicator": 16.3,
     "property_1": 1,
     "property_2": 0,
     "property_3": 0
@@ -618,7 +642,7 @@
   {
     "display_name": "Porsche 911 GT3 R Rennsport (992) - GT3",
     "internal_name": "preset_992ren_mech_1",
-    "performance_indicator": 19.8,
+    "performance_indicator": 18.6,
     "property_1": 1,
     "property_2": 0,
     "property_3": 0
@@ -626,7 +650,7 @@
   {
     "display_name": "Porsche 911 GT3 R Rennsport (992) - Unrestricted",
     "internal_name": "preset_992ren_mech_2",
-    "performance_indicator": 20.3,
+    "performance_indicator": 19.2,
     "property_1": 1,
     "property_2": 0,
     "property_3": 0
@@ -650,7 +674,7 @@
   {
     "display_name": "Porsche 911 Turbo 3.6 (964) - Standard",
     "internal_name": "preset_964_mech_1",
-    "performance_indicator": 12.3,
+    "performance_indicator": 12.2,
     "property_1": 0,
     "property_2": 2,
     "property_3": 0
@@ -658,7 +682,7 @@
   {
     "display_name": "Porsche 911 Turbo 3.6 (964) - X88",
     "internal_name": "preset_964_mech_2",
-    "performance_indicator": 12.4,
+    "performance_indicator": 12.3,
     "property_1": 0,
     "property_2": 2,
     "property_3": 0
@@ -666,7 +690,7 @@
   {
     "display_name": "Porsche 935 - GT2",
     "internal_name": "preset_935_mech_1",
-    "performance_indicator": 17.9,
+    "performance_indicator": 16.9,
     "property_1": 1,
     "property_2": 0,
     "property_3": 0
@@ -754,7 +778,7 @@
   {
     "display_name": "Volkswagen Golf 8 GTI - Clubsport",
     "internal_name": "preset_mk8gti_mech_1",
-    "performance_indicator": 10.8,
+    "performance_indicator": 10.6,
     "property_1": 0,
     "property_2": 0,
     "property_3": 0
@@ -762,7 +786,7 @@
   {
     "display_name": "Volkswagen Golf 8 R - Standard",
     "internal_name": "preset_mk8r_mech_1",
-    "performance_indicator": 10,
+    "performance_indicator": 9.8,
     "property_1": 0,
     "property_2": 0,
     "property_3": 0
